@@ -1,4 +1,6 @@
-# The Commune — 0.4.22
+# The Commune — 0.4.23
+
+The Hitlist has a real scroll bar beside its rows: drag the handle, or click the track to page toward the click. The handle's length shows how much of the list fits on screen. Its gutter is reserved even while the bar is hidden, so rows keep their width as entries come and go.
 
 Armory slots now carry the item's rarity colour as a frame around the icon, so a character's quality spread reads at a glance instead of one tooltip at a time. Empty slots and items the client has not cached yet stay neutral grey until the colour is known. The Hitlist now says how much of the list you are looking at, so it is clear the rows continue past the last one on screen. The project description box no longer flickers between its own text height and its laid-out height while the window is being resized.
 
