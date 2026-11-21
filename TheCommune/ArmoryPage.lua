@@ -2,6 +2,18 @@ local _,TC=...
 local leftColumn={1,2,3,15,5,4,19,9,10}
 local rightColumn={6,7,8,11,12,13,14,16,17}
 
+-- Dim neutral frame for an empty slot or an item the client has not cached yet.
+local emptyR,emptyG,emptyB=0.28,0.27,0.25
+
+local function QualityColor(quality)
+    if type(quality)~="number" or quality<0 then return emptyR,emptyG,emptyB end
+    local fn=GetItemQualityColor or (C_Item and C_Item.GetItemQualityColor)
+    if type(fn)~="function" then return emptyR,emptyG,emptyB end
+    local ok,r,g,b=pcall(fn,quality)
+    if not ok or type(r)~="number" or type(g)~="number" or type(b)~="number" then return emptyR,emptyG,emptyB end
+    return r,g,b
+end
+
 local function Ago(when)
     if type(when)~="number" then return "unknown" end
     local seconds=math.max(0,time()-when)
@@ -38,6 +50,10 @@ function TC.BuildArmoryPage(window,H)
     for _,entry in ipairs(a.slots) do
         local b=CreateFrame("Button",nil,a,"BackdropTemplate")
         b:SetSize(32,32)
+        -- The icon covers the button, so the rarity colour reads as a frame
+        -- around it rather than a backdrop behind it.
+        b.quality=b:CreateTexture(nil,"BACKGROUND")
+        b.quality:SetPoint("TOPLEFT",-3,3); b.quality:SetPoint("BOTTOMRIGHT",3,-3)
         b.icon=b:CreateTexture(nil,"ARTWORK"); b.icon:SetAllPoints()
         b:SetScript("OnEnter",function(self)
             if not GameTooltip then return end
@@ -76,13 +92,15 @@ function TC.BuildArmoryPage(window,H)
             entry.label:SetShown(snapshot~=nil)
             if snapshot then
                 if id then
-                    local name,link,texture=TC.ItemName(id)
+                    local name,link,texture,quality=TC.ItemName(id)
                     entry.button.link=link
                     entry.button.icon:SetTexture(texture)
+                    entry.button.quality:SetColorTexture(QualityColor(quality))
                     entry.label:SetText(name); entry.label:SetTextColor(0.82,0.77,0.66)
                 else
                     entry.button.link=nil
                     entry.button.icon:SetColorTexture(0.12,0.12,0.11,1)
+                    entry.button.quality:SetColorTexture(emptyR,emptyG,emptyB)
                     entry.label:SetText(TC.GearSlotName(entry.slot)); entry.label:SetTextColor(0.45,0.44,0.42)
                 end
             end

@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.21"
+TC.version = "0.4.22"
 TC.limit = 20
 
 function TC.Print(message)
@@ -157,9 +157,10 @@ end
 
 function TC.ItemName(id)
     if not id then return "Drop an item" end
-    local name, link, _, _, _, _, _, _, _, texture = C_Item.GetItemInfo(id)
+    local name, link, quality, _, _, _, _, _, _, texture = C_Item.GetItemInfo(id)
     if not name and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
-    return name or ("Item #" .. id), link or ("item:" .. id), texture or 134400
+    -- Quality is a trailing return so existing callers keep working unchanged.
+    return name or ("Item #" .. id), link or ("item:" .. id), texture or 134400, quality
 end
 
 function TC.Rows(filter, query, includeClosed)
