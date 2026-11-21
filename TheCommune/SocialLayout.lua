@@ -54,9 +54,8 @@ function TC.LayoutSocialPages(window,main,pages)
     Place(s.body,left,84,content,height-150); s.body:SetJustifyH("CENTER")
     Place(s.sync,width/2-70,height-48,140,28)
     local v=pages.pvp
-    Place(v.info,left,78,content,28); Place(v.legend,left,110,content,28)
-    Place(v.mode,width/2-90,142,180,28)
-    v.visible=math.min(7,math.max(1,math.floor((height-310)/32)))
-    for i,b in ipairs(v.rows) do Place(b,left,184+(i-1)*32,content,28) end
+    Place(v.mode,width/2-90,80,180,28)
+    v.visible=math.min(7,math.max(1,math.floor((height-248)/32)))
+    for i,b in ipairs(v.rows) do Place(b,left,122+(i-1)*32,content,28) end
     Place(v.detail,left,height-112,content,68); Place(v.tracking,left,height-40,content,32)
 end

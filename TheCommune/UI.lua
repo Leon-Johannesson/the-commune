@@ -128,7 +128,7 @@ function TC.Refresh()
     if window.activePage=="social" then TC.RefreshSocialWindow(); return end
     if window.activePage~="requests" then
         if TC.RefreshGuildPage then TC.RefreshGuildPage() end
-        window.status:SetText((TC.guildKey and "Guild board" or "Personal board").."  -  "..TC.syncStatus)
+        window.status:SetText(TC.syncStatus)
         return
     end
     if editingSlot then
@@ -157,7 +157,7 @@ function TC.Refresh()
         else row.entry = nil; row:Hide() end
     end
     window.count:SetText(#rows .. " requests" .. (#rows > visibleRows and "  |  Scroll for more" or ""))
-    window.status:SetText((TC.guildKey and "Guild board" or "Personal board") .. "  -  " .. TC.syncStatus)
+    window.status:SetText(TC.syncStatus)
     for name, button in pairs(filterButtons) do button:SetEnabled(filter ~= name) end
 end
 
@@ -210,7 +210,6 @@ Layout = function()
     Place(window.feedback, 0, -179, content - 324, 32)
     Place(window.save, content - 296, -172, 140, 26)
     Place(window.delete, content - 140, -172, 140, 26)
-    Place(window.footer, 0, -218, content - 24)
     if window.activePage~="requests" and TC.LayoutGuildPages then TC.LayoutGuildPages() end
     TC.Refresh()
 end
@@ -309,8 +308,6 @@ local function Build()
     window.feedback = Label(window.editor, "", 0, 0)
     window.feedback:SetWordWrap(true); window.feedback:SetJustifyV("TOP"); window.feedback:SetFontObject("GameFontHighlightSmall")
     window.feedback:SetTextColor(0.9, 0.8, 0.5)
-    window.footer = Label(window.editor, resizeEnabled and "Drag the bottom-right corner. /commune resize: lock size" or "/commune resize: unlock window size", 0, 0)
-    window.footer:SetFontObject("GameFontDisableSmall")
     TC.BuildGuildPages(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
     TC.BuildHitlistPage(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
     window.pageTabs={}
@@ -388,7 +385,7 @@ function TC.EnterSocial()
     window.requestPage:Hide(); window.new:Hide(); window.sync:Hide(); window.funButton:Hide()
     for _,page in pairs(window.guildPages) do page:Hide() end
     for _,tab in pairs(window.pageTabs) do tab:Hide() end
-    window.status:SetText("Guild fun - daily games, Social Credits and PvP")
+    window.status:SetText("")
     window.socialHost:Show(); window.back:Show(); window:Show()
     if TC.LayoutSocial then TC.LayoutSocial() end
 end
@@ -413,7 +410,6 @@ SlashCmdList.THECOMMUNE = function(command)
         if not window then Build() end
         resizeEnabled = not resizeEnabled
         StopSizing(); window:SetResizable(resizeEnabled); window.grip:SetShown(resizeEnabled); window:Show()
-        window.footer:SetText(resizeEnabled and "Drag the bottom-right corner. /commune resize: lock size" or "/commune resize: unlock window size")
         TC.Print(resizeEnabled and "Resizing unlocked. Drag the bottom-right corner; /commune resize locks it again." or "Window size locked and saved.")
         return
     end

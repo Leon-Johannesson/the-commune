@@ -1,4 +1,8 @@
-# The Commune — 0.4.18
+# The Commune — 0.4.19
+
+## Less text on guild panels (0.4.19)
+
+Trimmed repeated headings, footer tips, and always-visible instructions. The login summary takes less space when there are no new posts. New-post notices, guild sync status, error messages, and gameplay feedback stay visible.
 
 Each row of the nearby-hitlist alert now carries the player's class icon, and hovering a row opens a tooltip with their class, level and every guildmate's note about them. The same notes are appended to the in-world unit tooltip, so hovering a listed enemy tells you why they are listed and who listed them.
 

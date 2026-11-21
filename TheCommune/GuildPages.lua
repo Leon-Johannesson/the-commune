@@ -41,9 +41,8 @@ function TC.BuildGuildPages(window,H)
     crafts.onlyLabel=Label(crafts,"Craftable by guild only",0,0)
     crafts.only:SetScript("OnClick",function() crafts.offset=0; crafts.Update() end)
     crafts.headers={Label(crafts,"RECIPE",0,0),Label(crafts,"PROFESSION",0,0),Label(crafts,"GUILD CRAFTERS",0,0)}
-    crafts.details=Label(crafts,"Select a recipe to see who knows it.",0,0)
+    crafts.details=Label(crafts,"",0,0)
     crafts.details:SetWordWrap(true); crafts.details:SetJustifyV("TOP")
-    crafts.hint=Label(crafts,"",0,0); crafts.hint:SetFontObject("GameFontHighlightSmall")
     crafts.Select=function(entry)
         crafts.selected=entry.id
         local lines={entry.name.."  |  "..entry.profession..(entry.requiredSkill and ("  |  Required skill: "..entry.requiredSkill) or "  |  Required skill unknown")}
@@ -65,13 +64,11 @@ function TC.BuildGuildPages(window,H)
             row.c:SetTextColor(entry.craftable and 0.47 or 0.6,entry.craftable and 0.84 or 0.6,entry.craftable and 0.68 or 0.6)
             if crafts.selected==entry.id then crafts.Select(entry) end
         end)
-        crafts.count:SetText(#data.." recipes discovered  |  Guild-craftable recipes first")
-        crafts.hint:SetText(TC.craftStatus)
+        crafts.count:SetText(#data.." recipes")
         if #data==0 then
             crafts.details:SetText((crafts.search:GetText()~="" or crafts.only:GetChecked()) and
-                "No matching recipes. Clear the search or disable the guild-craftable filter." or
-                "No recipes scanned yet. Keep your profession open, clear its search/filters, and click Scan professions. If it stays empty: /commune craftsdebug")
-        elseif not crafts.selected then crafts.details:SetText("Select a recipe to see who knows it.") end
+                "No matching recipes." or "Open your profession and click Scan professions.")
+        elseif not crafts.selected then crafts.details:SetText("") end
     end
     crafts.Layout=function()
         local w,h=window:GetWidth(),window:GetHeight(); local content=w-48
@@ -99,7 +96,6 @@ function TC.BuildGuildPages(window,H)
         Place(crafts.count,24,-h+213,content)
         Place(crafts.details,24,-h+186,content,148)
         crafts.details:SetFontObject("GameFontHighlightSmall")
-        Place(crafts.hint,24,-h+34,content)
         crafts.Update()
     end
 
@@ -129,8 +125,6 @@ function TC.BuildGuildPages(window,H)
     f.description:SetScript("OnEscapePressed",function(self) self:ClearFocus() end)
     projects.feedback=Label(projects.editor,"",0,0); projects.feedback:SetWordWrap(true); projects.feedback:SetJustifyV("TOP")
     projects.feedback:SetFontObject("GameFontHighlightSmall")
-    projects.footer=Label(projects.editor,"Officers manage goals; project progress is confirmed manually.",0,0)
-    projects.footer:SetFontObject("GameFontDisableSmall")
     local function Editable()
         local allowed=TC.IsProjectOfficer(TC.owner)==true
         for _,field in pairs(f) do field:SetEnabled(allowed) end
@@ -174,7 +168,7 @@ function TC.BuildGuildPages(window,H)
             row.b:SetText(p.received.." / "..p.quantity..(p.received>=p.quantity and " (complete)" or ""))
             row.c:SetText(TC.DisplayName(p.writer))
         end)
-        projects.count:SetText(#data.." projects  |  "..(TC.IsProjectOfficer(TC.owner)==true and "Officer editing enabled" or "View only - guild officer privileges required"))
+        projects.count:SetText(#data.." projects")
         Editable()
     end
     projects.Layout=function()
@@ -202,7 +196,6 @@ function TC.BuildGuildPages(window,H)
         Place(f.description,column+24,-128,column,74)
         Place(projects.feedback,0,-210,column,34)
         Place(projects.save,content-296,-210,140,26); Place(projects.close,content-140,-210,140,26)
-        Place(projects.footer,0,-253,content)
         projects.Update()
     end
     projects.Select(nil)

@@ -55,9 +55,10 @@ function TC.UpdateSummary()
         local nr,np=TC.summaryCounts.newRequests,TC.summaryCounts.newProjects
         if nr>0 then parts[#parts+1]=nr.." new request"..(nr==1 and "" or "s") end
         if np>0 then parts[#parts+1]=np.." new project"..(np==1 and "" or "s") end
-        bubble.news:SetText(#parts>0 and table.concat(parts,"\n") or "No new posts since you last dismissed this.")
+        bubble.news:SetText(table.concat(parts,"\n"))
+        bubble.news:SetShown(#parts>0)
         local textHeight=#parts>1 and 30 or 16
-        bubble.news:SetHeight(textHeight); bubble:SetSize(264,106+textHeight)
+        bubble.news:SetHeight(textHeight); bubble:SetSize(264,#parts>0 and 106+textHeight or 98)
         local answered,done=TC.DailyProgress()
         bubble.quiz:SetText("Quiz: "..answered.."/4")
         bubble.wordle:SetText("Wordle: "..(done and "Done" or "To do"))
@@ -73,7 +74,7 @@ end
 
 local function Build()
     bubble=CreateFrame("Frame","TheCommuneSummary",UIParent,"BackdropTemplate")
-    bubble:SetSize(264,122)
+    bubble:SetSize(264,98)
     local saved=TC.db.summaryPosition or {}
     local points={CENTER=true,TOP=true,BOTTOM=true,LEFT=true,RIGHT=true,TOPLEFT=true,TOPRIGHT=true,BOTTOMLEFT=true,BOTTOMRIGHT=true}
     if points[saved.point] and points[saved.relativePoint] and tonumber(saved.x) and tonumber(saved.y) then

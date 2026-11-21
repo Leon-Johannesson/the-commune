@@ -64,7 +64,7 @@ local function Build()
 
     local w=pages.wordle
     w.header=Label(w,"",24,-110,732); w.header:SetJustifyH("CENTER")
-    w.message=Label(w,"Click the current row and type. Enter submits; Backspace edits.",24,-138,732,22)
+    w.message=Label(w,"",24,-138,732,22)
     w.message:SetJustifyH("CENTER"); w.message:SetFontObject("GameFontHighlightSmall")
     w.cells={}; w.keys={}
     for row=1,6 do
@@ -146,7 +146,7 @@ local function Build()
     w.miniArea:SetScript("OnMouseWheel",function(_,delta) w.boardOffset=math.max(0,w.boardOffset-delta*2); TC.RefreshSocialWindow() end)
 
     local c=pages.credits
-    c.info=Label(c,"Select an account. Only the guild master can add or remove credits.",24,-112,720,40)
+    c.info=Label(c,"",24,-112,720,40)
     c.rows={}; c.offset=0
     for i=1,8 do
         c.rows[i]=Button(c,"",24,-162-(i-1)*30,360,function(self) c.selected=self.account; TC.RefreshSocialWindow() end)
@@ -169,8 +169,6 @@ local function Build()
     s.sync=Button(s,"Sync guild",24,-554,140,function() TC.Query(true) end)
 
     local v=pages.pvp; v.offset=0; v.shame=false
-    v.info=Label(v,"Lifetime honorable kills",24,-110,720,32)
-    v.legend=Label(v,"Level gaps cover observed killing blows: ±2 levels | Higher: 3+ above | Shame: 10+ below",24,-142,720,28)
     v.mode=Button(v,"Show shame list",24,-180,180,function() v.shame=not v.shame; v.offset=0; TC.RefreshSocialWindow() end)
     v.rows={}
     for i=1,7 do
@@ -189,11 +187,11 @@ local colours={[0]={0.23,0.24,0.25},[1]={0.71,0.62,0.23},[2]={0.33,0.55,0.31}}
 function TC.RefreshSocialWindow()
     if flight and flight:IsShown() then TC.UpdateFlightPanel() end
     if not window or not window:IsShown() or not current then return end
-    local d=TC.DailyState(); local answered,finished=TC.DailyProgress()
+    local d=TC.DailyState(); local _,finished=TC.DailyProgress()
     window.balance:SetText(TC.db.fun.display.."  |  "..TC.CreditBalance().." Social Credits")
     if current=="quiz" then
         local p=pages.quiz; local question=TC.DailyQuiz()[p.slot]; local a=d.answers[p.slot]
-        p.header:SetText("Question "..p.slot.."/4  |  ".."Answered today: "..answered.."/4")
+        p.header:SetText("Question "..p.slot.."/4")
         p.question:SetText(question.question)
         for i,b in ipairs(p.buttons) do b:SetText(question.options[i]); b:SetEnabled(a==nil) end
         p.message:SetText(a and ((a.correct and "Correct! +1 Social Credit.\n" or "Not quite.\n").."Answer: "..question.answer.."\n"..question.explanation) or "")
@@ -202,7 +200,7 @@ function TC.RefreshSocialWindow()
         local _,day=TC.DailyState()
         if p.day~=day then
             p.day=day; p.changing=true; p.entry:SetText(""); p.changing=false
-            p.message:SetText("Click the current row and type. Enter submits; Backspace edits.")
+            p.message:SetText("")
         end
         local draft=p.entry:GetText()
         for row=1,6 do
@@ -237,17 +235,19 @@ function TC.RefreshSocialWindow()
         end
         TC.PositionWordInput(p)
         p.entry:SetEnabled(not finished); p.entry:SetShown(not finished)
-        p.header:SetText(d.wordleResult and (d.wordleResult<=6 and ("Solved in "..d.wordleResult.."! +"..(d.wordleCredits or 2).." Social Credits") or "Finished for today") or ("DAILY WORDLE  |  Guess "..active.." of 6"))
+        p.header:SetText(d.wordleResult and (d.wordleResult<=6 and ("Solved in "..d.wordleResult.."! +"..(d.wordleCredits or 2).." Social Credits") or "Finished for today") or ("Guess "..active.." of 6"))
         if finished then p.entry:ClearFocus(); p.message:SetText("Today's word: "..TC.WordAnswer():upper()) end
     elseif current=="credits" then
         local p=pages.credits; local rows=TC.ScoreRows(); p.offset=math.min(p.offset,math.max(0,#rows-(p.visible or 8)))
+        local isGM=TC.IsGuildMaster(TC.owner)==true
+        p.info:SetText(isGM and "" or "Only the guild master can adjust credits.")
         for i,b in ipairs(p.rows) do
             local entry=i<=(p.visible or 8) and rows[p.offset+i]; b.account=entry and entry.account
             if entry then b:SetText((entry.account==p.selected and "> " or "")..entry.profile.name.."  -  "..entry.balance.." SC"); b:Show() else b:Hide() end
         end
-        p.award:SetEnabled(TC.IsGuildMaster(TC.owner)==true)
-        p.transfer:SetEnabled(TC.IsGuildMaster(TC.owner)==true)
-        p.amount:SetEnabled(TC.IsGuildMaster(TC.owner)==true)
+        p.award:SetEnabled(isGM)
+        p.transfer:SetEnabled(isGM)
+        p.amount:SetEnabled(isGM)
         local lines={}; for i,event in ipairs(TC.db.fun.history or {}) do if i>6 then break end; lines[#lines+1]=event.text end
         p.history:SetText(table.concat(lines,"\n"))
     elseif current=="aim" then TC.RefreshAim(pages.aim)
