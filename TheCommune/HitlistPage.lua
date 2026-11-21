@@ -34,6 +34,8 @@ function TC.BuildHitlistPage(window,H)
     h.sound=CreateFrame("CheckButton",nil,h,"UICheckButtonTemplate"); h.sound:SetPoint("TOPLEFT",24,-508)
     h.soundLabel=Label(h,"Sound alerts",56,-516,200)
     h.sound:SetScript("OnClick",function(self) TC.db.fun.sound=not not self:GetChecked() end)
+    h.scrollHint=Label(h,"",0,0)
+    h.scrollHint:SetFontObject("GameFontDisableSmall")
     h.message=Label(h,"",0,0)
     h.message:SetWordWrap(true); h.message:SetJustifyV("TOP")
 
@@ -43,6 +45,9 @@ function TC.BuildHitlistPage(window,H)
             local entry=i<=(p.visible or 7) and rows[p.offset+i]; b.entry=entry
             if entry then b:SetText((entry.hit.name or entry.hit.target).."  |  "..entry.hit.reason.."  ("..TC.DisplayName(entry.owner)..")"); b:Show() else b:Hide() end
         end
+        local shown=math.min(#rows,p.visible or 7)
+        -- Nothing else says the list continues past the last visible row.
+        p.scrollHint:SetText(#rows>shown and ("Showing "..(p.offset+1).."-"..(p.offset+shown).." of "..#rows.."  -  scroll for more") or "")
         p.sound:SetChecked(TC.db.fun.sound)
         p.remove:SetEnabled(p.selected~=nil and (p.selected.owner==TC.owner or TC.IsProjectOfficer(TC.owner)==true))
     end
@@ -53,6 +58,7 @@ function TC.BuildHitlistPage(window,H)
         h.visible=math.min(7,math.max(1,math.floor((height-322)/32)))
         Place(h.sync,left,106,140,28)
         for i,b in ipairs(h.rows) do Place(b,left,144+(i-1)*32,content,28) end
+        Place(h.scrollHint,left,144+h.visible*32+4,content,16)
         local formY=height-170
         Field(h.name,left,formY,half); Field(h.reason,left+half+24,formY,half)
         local buttonWidth=(content-3*8)/4
