@@ -1,4 +1,6 @@
-# The Commune — 0.4.15
+# The Commune — 0.4.16
+
+The guild board retries membership lookup while guild information loads. Missing guild realm data can reuse an unambiguous saved guild record. Character labels display given names and surnames where available.
 
 Hovering over a listed opposing player adds a Hitlist line to the unit tooltip. The movable nearby alert shows multiple sightings at once with class and level when the client exposes them. Scroll to see more players. While out of combat, clicking a row targets its player if the addon can still identify them through an available unit token, such as a visible nameplate. The panel remembers its position.
 

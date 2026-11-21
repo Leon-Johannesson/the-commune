@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.15"
+TC.version = "0.4.16"
 TC.limit = 20
 
 function TC.Print(message)
@@ -39,13 +39,21 @@ function TC.NormalizeName(name)
     if not name:find("-", 1, true) and name:find(" ", 1, true) then
         return (name:gsub("%s+", "-"))
     end
-    if not name:find("-", 1, true) then name = name .. "-" .. (GetNormalizedRealmName() or GetRealmName():gsub("%s", "")) end
+    if not name:find("-", 1, true) then
+        local realm=GetNormalizedRealmName()
+        if not realm or realm=="" then realm=GetRealmName() end
+        if realm and realm~="" then name=name.."-"..realm:gsub("%s","") end
+    end
     return name
 end
 
 function TC.DisplayName(owner)
     local canonical = TC.NormalizeName(owner)
-    return canonical and (canonical:match("^([^%-]+)") or canonical) or "Unknown"
+    if not canonical then return "Unknown" end
+    local first,last=canonical:match("^([^-]+)%-(.+)$")
+    if not first then return canonical end
+    if last:match("^CAMWOW") then return first end
+    return first.." "..last
 end
 
 function TC.MergeOwnerAliases(store)
@@ -71,11 +79,16 @@ function TC.Identity()
     return TC.NormalizeName(name .. (realm and realm ~= "" and ("-" .. realm) or ""))
 end
 
-function TC.SetGuild()
+function TC.SetGuild(onlyIfChanged)
     local guild, _, _, realm = GetGuildInfo("player")
     TC.owner = TC.Identity()
-    TC.guildKey = TC.GuildStorageKey(guild,realm)
-    if TC.guildKey then TC.MergeEmptyRealmGuild(guild,TC.guildKey) end
+    local guildKey=TC.GuildStorageKey(guild,realm)
+    TC.guildPending=not guildKey and IsInGuild and IsInGuild() or false
+    if TC.guildPending and TC.guildKey then return false end
+    local changed=not TC.store or TC.guildKey~=guildKey
+    if onlyIfChanged and not changed then return false end
+    TC.guildKey=guildKey
+    if guildKey then TC.MergeEmptyRealmGuild(guild,guildKey) end
     -- Personal drafts work outside a guild and never leak into the next guild.
     local key = TC.guildKey or ("unguilded:" .. TC.owner)
     TC.db.guilds[key] = TC.db.guilds[key] or { owners = {} }
@@ -96,6 +109,7 @@ function TC.SetGuild()
         end
     end
     if TC.Refresh then TC.Refresh() end
+    return changed
 end
 
 function TC.IsActive(r)
@@ -118,7 +132,7 @@ function TC.Rows(filter, query, includeClosed)
             if not r.deleted and (includeClosed or TC.IsActive(r)) then
                 local name = TC.ItemName(r.item)
                 local matches = filter ~= "mine" or owner == TC.owner
-                local haystack = (owner .. " " .. name .. " " .. r.purpose):lower()
+                local haystack = (owner .. " " .. TC.DisplayName(owner) .. " " .. name .. " " .. r.purpose):lower()
                 if matches and (query == "" or haystack:find(query, 1, true)) then
                     rows[#rows + 1] = { owner = owner, slot = slot, request = r }
                 end
@@ -188,9 +202,31 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("ADDON_LOADED")
 events:RegisterEvent("PLAYER_LOGIN")
 events:RegisterEvent("PLAYER_GUILD_UPDATE")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
+events:RegisterEvent("GUILD_ROSTER_UPDATE")
 events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 events:RegisterEvent("BAG_UPDATE_DELAYED")
 events:RegisterEvent("MERCHANT_SHOW")
+local function RefreshGuild()
+    local previous=TC.guildKey
+    if TC.SetGuild(true) then
+        TC.ResetSync()
+        if not previous and TC.guildKey then TC.ShowSummary() end
+    elseif TC.Refresh then TC.Refresh() end
+end
+local retryScheduled
+local function RetryGuild()
+    if TC.guildKey or retryScheduled then return end
+    retryScheduled=true
+    if TC.guildPending and C_GuildInfo and C_GuildInfo.GuildRoster then pcall(C_GuildInfo.GuildRoster) end
+    for _, seconds in ipairs({1,3,8,15}) do C_Timer.After(seconds, function()
+        if seconds==15 then retryScheduled=false end
+        if not TC.guildKey then RefreshGuild() end
+    end) end
+end
+function TC.RefreshGuildMembership()
+    if TC.store and not TC.guildKey then RefreshGuild(); RetryGuild() end
+end
 events:SetScript("OnEvent", function(_, event, arg)
     if event == "ADDON_LOADED" and arg == addonName then
         TheCommuneDB = TheCommuneDB or { version = 1, guilds = {} }
@@ -202,6 +238,7 @@ events:SetScript("OnEvent", function(_, event, arg)
         TC.StartSocial()
         TC.StartProgress()
         TC.StartSync()
+        RetryGuild()
         if TC.StartGuildData then TC.StartGuildData() end
         if TC.StartSummary then TC.StartSummary() end
         if TooltipDataProcessor and Enum.TooltipDataType then
@@ -212,9 +249,8 @@ events:SetScript("OnEvent", function(_, event, arg)
     elseif event == "MERCHANT_SHOW" and TC.store then
         if TC.guildKey then TC.Query() end
     elseif event == "PLAYER_GUILD_UPDATE" and TC.db and (arg == "player" or not arg) then
-        local previousGuild=TC.guildKey
-        TC.SetGuild()
-        TC.ResetSync()
-        if not previousGuild and TC.guildKey and TC.ShowSummary then TC.ShowSummary() end
+        if TC.store then RefreshGuild(); RetryGuild() end
+    elseif TC.store and (event=="PLAYER_ENTERING_WORLD" or (event=="GUILD_ROSTER_UPDATE" and (not TC.guildKey or TC.guildKey:sub(1,1)==":"))) then
+        RefreshGuild()
     elseif TC.Refresh then TC.Refresh() end
 end)

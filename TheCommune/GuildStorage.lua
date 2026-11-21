@@ -19,9 +19,21 @@ local function MaxMap(target,source)
 end
 function TC.GuildStorageKey(guild,realm)
     if type(guild)~="string" or guild=="" then return end
-    if type(realm)~="string" or realm=="" then realm=GetNormalizedRealmName() end
+    local _,surname=UnitFullName("player")
+    if type(realm)=="string" and realm~="" and realm~=surname then return realm..":"..guild end
+    local match
+    for key in pairs(TC.db.guilds) do
+        local savedRealm,savedGuild=key:match("^([^:]+):(.+)$")
+        if savedGuild==guild and savedRealm~="unguilded" then
+            if match then match=nil; break end
+            match=key
+        end
+    end
+    if match then return match end
+    if type(realm)=="string" and realm~="" then return realm..":"..guild end
+    realm=GetNormalizedRealmName()
     if type(realm)~="string" or realm=="" then realm=GetRealmName() end
-    if type(realm)~="string" or realm=="" then return end
+    if type(realm)~="string" then realm="" end
     return realm..":"..guild
 end
 function TC.MergeEmptyRealmGuild(guild,key)

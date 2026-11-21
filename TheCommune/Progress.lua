@@ -18,7 +18,7 @@ local function OwnSender(sender)
     -- our own character/known alts, even if another realm has the same name.
     if not sender:find("-", 1, true) and not sender:find(" ", 1, true) then
         for owner in pairs(TC.db.characters) do
-            if TC.DisplayName(owner):lower() == sender:lower() then return true end
+            if (owner:match("^([^%-]+)") or owner):lower() == sender:lower() then return true end
         end
     end
     return false

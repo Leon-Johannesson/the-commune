@@ -18,7 +18,7 @@ function TC.InitSocial()
     local hash=0; for i=1,#TC.owner do hash=(hash*31+TC.owner:byte(i))%2147483647 end
     TC.db.fun=TC.db.fun or {account="a"..time().."-"..hash.."-"..math.random(10000,99999),days={},wallets={},stats={qa=0,qc=0,qd=0,wp=0,ww=0,wg=0},sound=true}
     local f=TC.db.fun
-    f.display=f.display or TC.DisplayName(TC.owner); f.wallets=f.wallets or {}; f.days=f.days or {}
+    f.display=TC.Clean(TC.DisplayName(TC.owner),32); f.wallets=f.wallets or {}; f.days=f.days or {}
     TC.store.social=TC.store.social or {accounts={},characters={},hits={}}
     TC.InitHitlist()
     local key=TC.guildKey or "personal"

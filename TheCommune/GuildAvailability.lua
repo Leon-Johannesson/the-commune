@@ -11,7 +11,8 @@ function TC.ApplyGuildAvailability(window)
         for _,tab in pairs(window.pageTabs) do tab:Show() end
         for _,page in pairs(window.guildPages) do page:Hide() end
         window.save:SetEnabled(false); window.delete:SetEnabled(false)
-        window.status:SetText("No guild")
+        window.status:SetText(TC.guildPending and "Loading guild" or "No guild")
+        window.noGuildText:SetText(TC.guildPending and "Waiting for guild information…" or "You're not in a guild.\nJoin one to use The Commune.")
         return false
     end
     if window.hadNoGuild then
