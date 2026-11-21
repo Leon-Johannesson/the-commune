@@ -1,6 +1,9 @@
 param(
     [Parameter(Mandatory)]
-    [string]$ZipPath
+    [string]$ZipPath,
+
+    [Parameter(Mandatory)]
+    [string]$Summary
 )
 
 $ErrorActionPreference = 'Stop'
@@ -20,7 +23,7 @@ if ($webhook -notmatch '^https://discord\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$')
 }
 $threadId = '1573664576703045703'
 $payload = @{
-    content = "The Commune $version"
+    content = "The Commune $version — $Summary"
     allowed_mentions = @{parse = @()}
 } | ConvertTo-Json -Compress
 try {
