@@ -79,6 +79,9 @@ end
 function TC.PublishSocial(send)
     if not TC.wallet then return end
     local f,w=TC.db.fun,TC.wallet
+    -- The guild roster can supply our surname well after login, so take the
+    -- label as it reads now instead of the one cached when the guild loaded.
+    f.display=TC.Clean(TC.DisplayName(TC.owner),32)
     local d,day=TC.DailyState(); local answered,correct=0,0
     for i=1,4 do if d.answers[i] then answered=answered+1; if d.answers[i].correct then correct=correct+1 end end end
     local s=f.stats

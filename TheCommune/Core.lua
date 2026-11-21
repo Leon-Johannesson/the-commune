@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.16"
+TC.version = "0.4.17"
 TC.limit = 20
 
 function TC.Print(message)
@@ -47,13 +47,52 @@ function TC.NormalizeName(name)
     return name
 end
 
+local surnames, rosterLoaded = {}, false
+
+-- Addon messages and UnitFullName sometimes deliver only the given name, so a
+-- key can end in the CAMWOW physical realm instead of a surname. The guild
+-- roster still spells out both parts; cache it until the roster changes.
+local function RosterSurnames()
+    if rosterLoaded or not GetNumGuildMembers or not GetGuildRosterInfo then return surnames end
+    local count = GetNumGuildMembers()
+    if not count or count == 0 then return surnames end
+    surnames, rosterLoaded = {}, true
+    for index = 1, count do
+        local name = GetGuildRosterInfo(index)
+        local canonical = TC.NormalizeName(name)
+        if canonical then
+            local given, last = canonical:match("^([^-]+)%-(.+)$")
+            if last and not last:match("^CAMWOW") then
+                -- Two guildmates can share a given name; it then names nobody.
+                if surnames[given] == nil then surnames[given] = last
+                elseif surnames[given] ~= last then surnames[given] = false end
+            end
+        end
+    end
+    return surnames
+end
+
+function TC.Surname(canonical, given)
+    local social = TC.store and TC.store.social
+    local account = social and social.characters and social.characters[canonical]
+    local profile = account and social.accounts and social.accounts[account]
+    -- A published label is the owner's own claim, so take the surname from it
+    -- only when its given name matches the key the packet already proved.
+    if profile and type(profile.name) == "string" then
+        local first, rest = profile.name:match("^(%S+)%s+(%S.*)$")
+        if rest and first == given then return rest end
+    end
+    local last = RosterSurnames()[given]
+    if last then return last end
+end
+
 function TC.DisplayName(owner)
     local canonical = TC.NormalizeName(owner)
     if not canonical then return "Unknown" end
     local first,last=canonical:match("^([^-]+)%-(.+)$")
     if not first then return canonical end
-    if last:match("^CAMWOW") then return first end
-    return first.." "..last
+    if last:match("^CAMWOW") then last=TC.Surname(canonical,first) end
+    return last and (first.." "..last) or first
 end
 
 function TC.MergeOwnerAliases(store)
@@ -228,6 +267,7 @@ function TC.RefreshGuildMembership()
     if TC.store and not TC.guildKey then RefreshGuild(); RetryGuild() end
 end
 events:SetScript("OnEvent", function(_, event, arg)
+    if event == "GUILD_ROSTER_UPDATE" then rosterLoaded = false end
     if event == "ADDON_LOADED" and arg == addonName then
         TheCommuneDB = TheCommuneDB or { version = 1, guilds = {} }
         TheCommuneDB.guilds = TheCommuneDB.guilds or {}

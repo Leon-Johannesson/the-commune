@@ -1,4 +1,6 @@
-# The Commune — 0.4.16
+# The Commune — 0.4.17
+
+Player labels now keep the surname when a guildmate's name reaches us without one. The addon reads the missing surname from the player's own published profile, or from the guild roster when exactly one guildmate carries that given name. The PvP list names the stored character key on any rows that would still read identically, so two characters called the same thing are never mistaken for one.
 
 The guild board retries membership lookup while guild information loads. Missing guild realm data can reuse an unambiguous saved guild record. Character labels display given names and surnames where available.
 

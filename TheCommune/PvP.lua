@@ -106,7 +106,11 @@ function TC.ReceivePvP(message,sender)
 end
 function TC.PvPRows(shame)
     local rows={}
-    for owner,p in pairs(TC.store.social.pvp or {}) do rows[#rows+1]={owner=owner,stats=p} end
+    for owner,p in pairs(TC.store.social.pvp or {}) do rows[#rows+1]={owner=owner,stats=p,label=TC.DisplayName(owner)} end
+    -- Characters that share a given name read as one player while no surname is
+    -- known, so name the stored key on the rows that still collide.
+    local counts={}; for _,r in ipairs(rows) do counts[r.label]=(counts[r.label] or 0)+1 end
+    for _,r in ipairs(rows) do if counts[r.label]>1 then r.label=r.label.." ("..(r.owner:match("%-(.+)$") or r.owner)..")" end end
     table.sort(rows,function(a,b)
         local x,y=shame and a.stats.below10 or (a.stats.honorKills or a.stats.total),shame and b.stats.below10 or (b.stats.honorKills or b.stats.total)
         if x~=y then return x>y end; return a.owner<b.owner

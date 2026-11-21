@@ -254,13 +254,14 @@ function TC.RefreshSocialWindow()
     elseif current=="scores" then pages.scores.body:SetText(ScoreText(20))
     elseif current=="pvp" then
         local p=pages.pvp; local rows=TC.PvPRows(p.shame); p.offset=math.min(p.offset,math.max(0,#rows-(p.visible or 7)))
+        local labels={}; for _,r in ipairs(rows) do labels[r.owner]=r.label end
         p.tracking:SetText(TC.PvPStatus())
         p.mode:SetText(p.shame and "Show most kills" or "Show shame list")
         for i,b in ipairs(p.rows) do
             local r=i<=(p.visible or 7) and rows[p.offset+i]; b.owner=r and r.owner
             if r then
                 local s=r.stats
-                b:SetText(TC.DisplayName(r.owner).." | Honorable kills: "..(s.honorKills~=nil and s.honorKills or "?").." | Deaths: "..(s.deaths~=nil and (s.deaths..(s.deathsLifetime and "" or "*")) or "?").." | Observed: "..s.total.." | ±2: "..s.fair.." | 10+ below: "..s.below10)
+                b:SetText(r.label.." | Honorable kills: "..(s.honorKills~=nil and s.honorKills or "?").." | Deaths: "..(s.deaths~=nil and (s.deaths..(s.deathsLifetime and "" or "*")) or "?").." | Observed: "..s.total.." | ±2: "..s.fair.." | 10+ below: "..s.below10)
                 b:Show()
             else b:Hide() end
         end
@@ -269,7 +270,7 @@ function TC.RefreshSocialWindow()
             local gaps={}; for diff,count in pairs(selected.diffs) do gaps[#gaps+1]={diff=diff,count=count} end
             table.sort(gaps,function(a,b) return a.diff<b.diff end)
             local parts={}; for _,g in ipairs(gaps) do parts[#parts+1]=(g.diff>0 and "+" or "")..g.diff..": "..g.count end
-            p.detail:SetText(TC.DisplayName(p.selected).." - victim level minus killer level (negative = lower)\n"..table.concat(parts," | ").."\nUnknown level: "..selected.unknown.." | Deaths: "..(selected.deaths or "?")..(selected.deathsLifetime and " (lifetime, all causes)" or " (tracked since addon, all causes)"))
+            p.detail:SetText((labels[p.selected] or TC.DisplayName(p.selected)).." - victim level minus killer level (negative = lower)\n"..table.concat(parts," | ").."\nUnknown level: "..selected.unknown.." | Deaths: "..(selected.deaths or "?")..(selected.deathsLifetime and " (lifetime, all causes)" or " (tracked since addon, all causes)"))
         else p.detail:SetText("Select a player for the level-gap breakdown. Shame list ranks kills against players 10+ levels lower.") end
     end
 end
