@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.19"
+TC.version = "0.4.20"
 TC.limit = 20
 
 function TC.Print(message)
@@ -281,6 +281,7 @@ events:SetScript("OnEvent", function(_, event, arg)
         RetryGuild()
         if TC.StartGuildData then TC.StartGuildData() end
         if TC.StartSummary then TC.StartSummary() end
+        if TC.StartMinimapButton then TC.StartMinimapButton() end
         if TooltipDataProcessor and Enum.TooltipDataType then
             TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, AddTooltip)
             if Enum.TooltipDataType.Unit then TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, TC.AddHitTooltip) end

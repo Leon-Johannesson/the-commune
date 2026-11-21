@@ -390,6 +390,42 @@ function TC.EnterSocial()
     if TC.LayoutSocial then TC.LayoutSocial() end
 end
 
+function TC.StartMinimapButton()
+    if not Minimap then return end
+
+    local button = CreateFrame("Button", nil, Minimap)
+    button:SetSize(31, 31)
+    button:SetPoint("CENTER", Minimap, "BOTTOMLEFT", 19, 19)
+    button:SetFrameLevel(Minimap:GetFrameLevel() + 5)
+    button:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+
+    local background = button:CreateTexture(nil, "BACKGROUND")
+    background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    background:SetSize(22, 22)
+    background:SetPoint("CENTER")
+
+    local mark = button:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    mark:SetPoint("CENTER")
+    mark:SetText("C")
+    mark:SetTextColor(0.47, 0.84, 0.68)
+
+    local ring = button:CreateTexture(nil, "OVERLAY")
+    ring:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    ring:SetSize(54, 54)
+    ring:SetPoint("TOPLEFT")
+
+    button:SetScript("OnClick", function()
+        GameTooltip:Hide()
+        SlashCmdList.THECOMMUNE("")
+    end)
+    button:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText("The Commune")
+        GameTooltip:Show()
+    end)
+    button:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+
 SLASH_THECOMMUNE1 = "/commune"
 SLASH_THECOMMUNE2 = "/thecommune"
 SlashCmdList.THECOMMUNE = function(command)

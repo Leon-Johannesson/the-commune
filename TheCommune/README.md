@@ -1,4 +1,8 @@
-# The Commune — 0.4.19
+# The Commune — 0.4.20
+
+## Minimap button (0.4.20)
+
+Click the green C on the minimap to open or close The Commune.
 
 ## Less text on guild panels (0.4.19)
 
