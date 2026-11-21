@@ -18,7 +18,9 @@ if (-not (Test-Path -LiteralPath $secretPath -PathType Leaf)) {
 }
 $secure = Get-Content -LiteralPath $secretPath -Raw | ConvertTo-SecureString
 $webhook = [Net.NetworkCredential]::new('', $secure).Password
-if ($webhook -notmatch '^https://discord\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$') {
+# Must stay in step with the pattern in Set-DiscordWebhook.ps1: Discord also
+# issues canary/ptb hosts, the legacy discordapp.com domain and versioned paths.
+if ($webhook -notmatch '^https://(?:canary\.|ptb\.)?discord(?:app)?\.com/api/(?:v\d+/)?webhooks/\d+/[A-Za-z0-9_.-]+$') {
     throw 'The stored credential is not a Discord webhook URL.'
 }
 $threadId = '1573664576703045703'

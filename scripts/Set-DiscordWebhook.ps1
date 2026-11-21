@@ -30,11 +30,25 @@ if (Test-Path -LiteralPath $secretPath -PathType Leaf) {
 $secure = Read-Host -AsSecureString 'Discord webhook URL (input hidden)'
 $plain = [Net.NetworkCredential]::new('', $secure).Password
 
-if ($plain -notmatch '^https://discord\.com/api/webhooks/\d+/[A-Za-z0-9_-]+$') {
-    # Never include the entered value in the error: it would land in the log.
+# Discord hands out canary/ptb hosts, the legacy discordapp.com domain, and
+# sometimes an explicit API version, so accept all of them.
+$pattern = '^https://(?:canary\.|ptb\.)?discord(?:app)?\.com/api/(?:v\d+/)?webhooks/(\d+)/([A-Za-z0-9_.-]+)$'
+$trimmed = $plain.Trim()
+if ($trimmed -notmatch $pattern) {
+    # Describe the shape only. Never echo the value: it would land in the log.
+    $length = $trimmed.Length
+    $host_ = if ($trimmed -match '^https?://([^/]+)/') { $Matches[1] } else { '(no https://host/ prefix)' }
+    $segments = if ($length -gt 0) { ($trimmed -split '/').Count } else { 0 }
+    $odd = ($trimmed.ToCharArray() | Where-Object { $_ -notmatch '[A-Za-z0-9_./:-]' }).Count
+    Write-Warning "Input did not match a webhook URL. Length: $length. Host: $host_. Slash-separated segments: $segments. Characters outside the expected set: $odd."
+    if ($length -eq 0) {
+        Write-Warning 'Nothing was captured. Some terminals ignore Ctrl+V at a hidden prompt - try right-click paste.'
+    }
     throw 'That does not look like a Discord webhook URL. Nothing was written.'
 }
+if ($trimmed -ne $plain) { $secure = ConvertTo-SecureString -String $trimmed -AsPlainText -Force }
 $plain = $null
+$trimmed = $null
 
 if (-not (Test-Path -LiteralPath $localDir -PathType Container)) {
     New-Item -ItemType Directory -Path $localDir | Out-Null
