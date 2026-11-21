@@ -33,6 +33,23 @@ function TC.HitUnitMatch(unit)
     end
 end
 
+-- Several guildmates can list the same enemy, each with their own note.
+function TC.HitNotes(key)
+    local notes = {}
+    if not key or not TC.store or not TC.store.social then return notes end
+    for owner, slots in pairs(TC.store.social.hits) do
+        for _, entry in pairs(slots) do
+            if not entry.deleted and entry.target == key then
+                local reason = entry.reason
+                if type(reason) ~= "string" or reason == "" then reason = "No reason given" end
+                notes[#notes + 1] = reason .. " - " .. TC.DisplayName(owner)
+            end
+        end
+    end
+    table.sort(notes)
+    return notes
+end
+
 function TC.AddHitTooltip(tooltip, data)
     if tooltip ~= GameTooltip then return end
     local _, unit = Safe(tooltip.GetUnit, tooltip)
@@ -40,10 +57,34 @@ function TC.AddHitTooltip(tooltip, data)
         local guid = Safe(function() return data.guid end)
         if guid and guid == Safe(UnitGUID, "mouseover") then unit = "mouseover" end
     end
-    local entry = TC.HitUnitMatch(unit)
+    local entry, key = TC.HitUnitMatch(unit)
     if entry then
         tooltip:AddLine("On your guild's Hitlist", 1, 0.36, 0.33)
+        for _, note in ipairs(TC.HitNotes(key)) do tooltip:AddLine(note, 1, 0.82, 0, true) end
     end
+end
+
+local function SetClassIcon(icon, token)
+    local coords = token and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[token]
+    if coords then
+        icon:SetTexture("Interface\\TargetingFrame\\UI-Classes-Circles")
+        icon:SetTexCoord(coords[1], coords[2], coords[3], coords[4])
+    else
+        -- The client does not always expose a class for a passing nameplate.
+        icon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    end
+end
+
+local function RowTooltip(row)
+    local sighting = row.sighting
+    if not sighting or not GameTooltip then return end
+    GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+    GameTooltip:SetText(sighting.name, 1, 0.82, 0)
+    GameTooltip:AddLine(sighting.class .. "  |  Level " .. sighting.level, 1, 1, 1)
+    for _, note in ipairs(TC.HitNotes(sighting.key)) do GameTooltip:AddLine(note, 1, 0.36, 0.33, true) end
+    GameTooltip:AddLine(InCombat() and "Targeting resumes after combat" or "Click to target", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
 end
 
 local function FindUnit(sighting)
@@ -94,6 +135,8 @@ local function BuildTargets()
         row:EnableMouseWheel(true)
         row:SetScript("OnMouseWheel", alert:GetScript("OnMouseWheel"))
         row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+        row:SetScript("OnEnter", RowTooltip)
+        row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         row:SetScript("PreClick", function(self)
             if InCombat() then return end
             local unit
@@ -125,11 +168,14 @@ local function Build()
     end)
     alert:EnableMouseWheel(true)
     alert:SetScript("OnMouseWheel", function(_, delta) offset=math.max(0,offset-delta); TC.RefreshHitAlert() end)
-    alert.rows = {}
+    alert.rows, alert.icons = {}, {}
     for i = 1, rowLimit do
+        local icon = alert:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(18, 18); icon:SetPoint("TOPLEFT", 14, -36 - (i - 1) * rowHeight)
+        alert.icons[i] = icon
         local line = alert:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        line:SetPoint("TOPLEFT", 15, -38 - (i - 1) * rowHeight)
-        line:SetWidth(width - 30); line:SetJustifyH("LEFT"); line:SetWordWrap(false)
+        line:SetPoint("TOPLEFT", 37, -38 - (i - 1) * rowHeight)
+        line:SetWidth(width - 52); line:SetJustifyH("LEFT"); line:SetWordWrap(false)
         alert.rows[i] = line
     end
     alert.status = alert:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
@@ -153,7 +199,11 @@ function TC.RefreshHitAlert()
     for i,line in ipairs(alert.rows) do
         local sighting = rows[offset+i]
         line:SetShown(sighting ~= nil)
-        if sighting then line:SetText(sighting.name .. "  |  " .. sighting.class .. "  |  Lv " .. sighting.level) end
+        alert.icons[i]:SetShown(sighting ~= nil)
+        if sighting then
+            line:SetText(sighting.name .. "  |  " .. sighting.class .. "  |  Lv " .. sighting.level)
+            SetClassIcon(alert.icons[i], sighting.token)
+        end
         if targets and not InCombat() then
             targets.rows[i].sighting = sighting
             targets.rows[i]:SetShown(sighting ~= nil)
@@ -171,9 +221,15 @@ function TC.ShowHitAlert(name, _, unit, key)
     if store ~= TC.store then sightings, dismissed, offset, store = {}, {}, 0, TC.store end
     key = key or TC.PlayerKey(name)
     if not key then return end
-    local class, level, guid
-    if unit then class, level, guid = Safe(UnitClass, unit), Safe(UnitLevel, unit), Safe(UnitGUID, unit) end
+    local class, token, level, guid
+    -- UnitClass returns the localized name and the class file token; the token
+    -- is what indexes the class icon atlas, so keep both.
+    if unit then
+        class, token = Safe(UnitClass, unit)
+        level, guid = Safe(UnitLevel, unit), Safe(UnitGUID, unit)
+    end
     sightings[key] = {key=key, name=name, unit=unit, guid=guid, seen=GetTime(),
+        token=type(token)=="string" and token or nil,
         class=class or "Unknown class", level=type(level)=="number" and level>0 and tostring(level) or "?"}
     TC.RefreshHitAlert()
 end

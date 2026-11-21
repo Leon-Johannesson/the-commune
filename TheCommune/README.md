@@ -1,4 +1,6 @@
-# The Commune — 0.4.17
+# The Commune — 0.4.18
+
+Each row of the nearby-hitlist alert now carries the player's class icon, and hovering a row opens a tooltip with their class, level and every guildmate's note about them. The same notes are appended to the in-world unit tooltip, so hovering a listed enemy tells you why they are listed and who listed them.
 
 Player labels now keep the surname when a guildmate's name reaches us without one. The addon reads the missing surname from the player's own published profile, or from the guild roster when exactly one guildmate carries that given name. The PvP list names the stored character key on any rows that would still read identically, so two characters called the same thing are never mistaken for one.
 
