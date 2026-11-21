@@ -1,0 +1,220 @@
+local addonName, TC = ...
+_G.TheCommune = TC
+TC.version = "0.4.15"
+TC.limit = 20
+
+function TC.Print(message)
+    DEFAULT_CHAT_FRAME:AddMessage("|cff79d6adThe Commune:|r " .. message)
+end
+
+-- Keep user text safe for tooltips, the wire format, and UTF-8 truncation.
+function TC.Clean(value, limit)
+    local text = tostring(value or "")
+    text = text:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+    text = text:gsub("|H.-|h(.-)|h", "%1"):gsub("[%c|]", " ")
+    text = text:match("^%s*(.-)%s*$")
+    if #text > limit then
+        local cut = limit + 1
+        while cut > 1 and (text:byte(cut) or 0) >= 128 and (text:byte(cut) or 0) < 192 do cut = cut - 1 end
+        text = text:sub(1, cut - 1)
+    end
+    return text
+end
+
+function TC.Integer(value, low, high)
+    local n = tonumber(value)
+    if not n or n ~= n or n % 1 ~= 0 or n < low or n > high then return nil end
+    return n
+end
+
+function TC.NormalizeName(name)
+    if type(name) ~= "string" or name == "" then return nil end
+    -- Forever can deliver "Radio Lysander-CAMWOWEU5Realm8PvP" for the
+    -- same character that UnitFullName identifies as "Radio", "Lysander".
+    -- The CAMWOW suffix is a physical realm, not the character's virtual realm.
+    local virtualName, physicalRealm = name:match("^([^%-]+)%-(.+)$")
+    if virtualName and virtualName:find(" ", 1, true) and physicalRealm:match("^CAMWOW") then
+        return (virtualName:gsub("%s+", "-"))
+    end
+    if not name:find("-", 1, true) and name:find(" ", 1, true) then
+        return (name:gsub("%s+", "-"))
+    end
+    if not name:find("-", 1, true) then name = name .. "-" .. (GetNormalizedRealmName() or GetRealmName():gsub("%s", "")) end
+    return name
+end
+
+function TC.DisplayName(owner)
+    local canonical = TC.NormalizeName(owner)
+    return canonical and (canonical:match("^([^%-]+)") or canonical) or "Unknown"
+end
+
+function TC.MergeOwnerAliases(store)
+    -- Rebuild keys instead of removing them while iterating. A slot is the same
+    -- request across aliases; retain its newest revision, including deletions.
+    local owners = {}
+    for owner, slots in pairs(store.owners) do
+        local canonical = TC.NormalizeName(owner)
+        owners[canonical] = owners[canonical] or {}
+        for slot, r in pairs(slots) do
+            local previous = owners[canonical][slot]
+            if not previous or r.revision > previous.revision or
+                (r.revision == previous.revision and r.deleted and not previous.deleted) then
+                owners[canonical][slot] = r
+            end
+        end
+    end
+    store.owners = owners
+end
+
+function TC.Identity()
+    local name, realm = UnitFullName("player")
+    return TC.NormalizeName(name .. (realm and realm ~= "" and ("-" .. realm) or ""))
+end
+
+function TC.SetGuild()
+    local guild, _, _, realm = GetGuildInfo("player")
+    TC.owner = TC.Identity()
+    TC.guildKey = TC.GuildStorageKey(guild,realm)
+    if TC.guildKey then TC.MergeEmptyRealmGuild(guild,TC.guildKey) end
+    -- Personal drafts work outside a guild and never leak into the next guild.
+    local key = TC.guildKey or ("unguilded:" .. TC.owner)
+    TC.db.guilds[key] = TC.db.guilds[key] or { owners = {} }
+    TC.store = TC.db.guilds[key]
+    TC.MergeOwnerAliases(TC.store)
+    TC.store.owners[TC.owner] = TC.store.owners[TC.owner] or {}
+    if TC.RegisterCharacter then TC.RegisterCharacter() end
+    if TC.InitGuildData then TC.InitGuildData() end
+    if TC.InitSocial then TC.InitSocial() end
+    if not TC.guildKey and TC.HideFlightPanel then TC.HideFlightPanel() end
+    if not TC.guildKey and TC.HideDeathPrompt then TC.HideDeathPrompt() end
+    -- Retire the removed options on our own published requests. Revision the
+    -- change so guildmates also receive the updated, non-expiring request.
+    for _, r in pairs(TC.store.owners[TC.owner]) do
+        if not r.deleted and (r.expires ~= 0 or r.ongoing or r.craft ~= "") then
+            r.expires, r.ongoing, r.craft = 0, false, ""
+            r.revision = math.max(time(), r.revision + 1)
+        end
+    end
+    if TC.Refresh then TC.Refresh() end
+end
+
+function TC.IsActive(r)
+    return r and not r.deleted and r.received < r.quantity
+end
+
+function TC.ItemName(id)
+    if not id then return "Drop an item" end
+    local name, link, _, _, _, _, _, _, _, texture = C_Item.GetItemInfo(id)
+    if not name and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+    return name or ("Item #" .. id), link or ("item:" .. id), texture or 134400
+end
+
+function TC.Rows(filter, query, includeClosed)
+    local rows = {}
+    if not TC.store then return rows end
+    query = (query or ""):lower()
+    for owner, slots in pairs(TC.store.owners) do
+        for slot, r in pairs(slots) do
+            if not r.deleted and (includeClosed or TC.IsActive(r)) then
+                local name = TC.ItemName(r.item)
+                local matches = filter ~= "mine" or owner == TC.owner
+                local haystack = (owner .. " " .. name .. " " .. r.purpose):lower()
+                if matches and (query == "" or haystack:find(query, 1, true)) then
+                    rows[#rows + 1] = { owner = owner, slot = slot, request = r }
+                end
+            end
+        end
+    end
+    table.sort(rows, function(a, b) if a.owner == b.owner then return a.slot < b.slot end return a.owner < b.owner end)
+    return rows
+end
+
+function TC.Save(slot, data)
+    local editingExisting = slot ~= nil
+    local item = TC.Integer(data.item, 1, 2147483647)
+    local quantity = TC.Integer(data.quantity == nil and 1 or data.quantity, 1, 999999)
+    local received = TC.Integer(data.received == nil and 0 or data.received, 0, 999999)
+    if not item then return nil, "Enter an exact known item name, choose a suggestion, or drop/link an item." end
+    if not quantity or not received then return nil, "Use whole numbers: quantity 1-999999, received 0-999999." end
+    local slots = TC.store.owners[TC.owner]
+    if not slot then
+        for i = 1, TC.limit do if not slots[i] or not TC.IsActive(slots[i]) then slot = i; break end end
+    end
+    if not slot then return nil, "You have 20 active requests. Close one before adding another." end
+    local previous = slots[slot]
+    local revision = math.max(time(), (previous and previous.revision or 0) + 1)
+    -- Keep the legacy wire fields empty for compatibility with older clients.
+    slots[slot] = { item = item, quantity = quantity, received = received, ongoing = false,
+        expires = 0, revision = revision,
+        created = editingExisting and previous and TC.IsActive(previous) and previous.item==item and (previous.created or previous.revision) or revision,
+        purpose = TC.Clean(data.purpose, 64), craft = "", delivery = TC.Clean(data.delivery, 40) }
+    TC.BroadcastSlot(slot)
+    if TC.Refresh then TC.Refresh() end
+    return slot
+end
+
+function TC.Delete(slot)
+    local r = TC.store.owners[TC.owner][slot]
+    if not r then return end
+    TC.store.owners[TC.owner][slot] = { deleted = true, revision = math.max(time(), r.revision + 1) }
+    TC.BroadcastSlot(slot)
+    if TC.Refresh then TC.Refresh() end
+end
+
+local function AddTooltip(tooltip, data)
+    if not TC.store or not data or not data.id then return end
+    if issecretvalue and issecretvalue(data.id) then return end
+    local matches = {}
+    for owner, slots in pairs(TC.store.owners) do
+        for _, r in pairs(slots) do
+            if TC.IsActive(r) and r.item == data.id then matches[#matches + 1] = { owner = owner, r = r } end
+        end
+    end
+    if #matches == 0 then return end
+    table.sort(matches, function(a, b) return a.owner < b.owner end)
+    tooltip:AddLine(" ")
+    tooltip:AddLine("The Commune - Guild requests", 0.47, 0.84, 0.68)
+    for i = 1, math.min(#matches, 8) do
+        local m = matches[i]
+        local need = math.max(0, m.r.quantity - m.r.received) .. " more needed"
+        tooltip:AddDoubleLine(TC.DisplayName(m.owner), need, 1, 1, 1, 0.47, 0.84, 0.68)
+        if m.r.purpose ~= "" then tooltip:AddLine(m.r.purpose, 0.8, 0.8, 0.8, true) end
+        if m.r.delivery ~= "" then tooltip:AddLine("Delivery: " .. m.r.delivery, 0.8, 0.8, 0.8, true) end
+    end
+    if #matches > 8 then tooltip:AddLine((#matches - 8) .. " more requests - /commune", 0.8, 0.8, 0.8) end
+end
+
+local events = CreateFrame("Frame")
+events:RegisterEvent("ADDON_LOADED")
+events:RegisterEvent("PLAYER_LOGIN")
+events:RegisterEvent("PLAYER_GUILD_UPDATE")
+events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+events:RegisterEvent("BAG_UPDATE_DELAYED")
+events:RegisterEvent("MERCHANT_SHOW")
+events:SetScript("OnEvent", function(_, event, arg)
+    if event == "ADDON_LOADED" and arg == addonName then
+        TheCommuneDB = TheCommuneDB or { version = 1, guilds = {} }
+        TheCommuneDB.guilds = TheCommuneDB.guilds or {}
+        TC.db = TheCommuneDB
+    elseif event == "PLAYER_LOGIN" then
+        TC.SetGuild()
+        TC.InitItemSearch()
+        TC.StartSocial()
+        TC.StartProgress()
+        TC.StartSync()
+        if TC.StartGuildData then TC.StartGuildData() end
+        if TC.StartSummary then TC.StartSummary() end
+        if TooltipDataProcessor and Enum.TooltipDataType then
+            TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Item, AddTooltip)
+            if Enum.TooltipDataType.Unit then TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, TC.AddHitTooltip) end
+        else TC.Print("Item tooltip API unavailable on this client.") end
+        TC.Print("v" .. TC.version .. " loaded. Type /commune to open the guild board.")
+    elseif event == "MERCHANT_SHOW" and TC.store then
+        if TC.guildKey then TC.Query() end
+    elseif event == "PLAYER_GUILD_UPDATE" and TC.db and (arg == "player" or not arg) then
+        local previousGuild=TC.guildKey
+        TC.SetGuild()
+        TC.ResetSync()
+        if not previousGuild and TC.guildKey and TC.ShowSummary then TC.ShowSummary() end
+    elseif TC.Refresh then TC.Refresh() end
+end)

@@ -1,0 +1,37 @@
+## Interface: 16001
+## Title: The Commune
+## Notes: Guild requests, crafts, projects, hitlist, Social Credits, and daily games.
+## Author: The Commune
+## Version: 0.4.15
+## SavedVariables: TheCommuneDB
+
+Core.lua
+Theme.lua
+GuildStorage.lua
+WindowPositions.lua
+Diagnostics.lua
+Sync.lua
+Progress.lua
+CraftRequirements.lua
+RecipeSearch.lua
+GuildData.lua
+GuildPages.lua
+HitlistPage.lua
+GuildAvailability.lua
+WordDictionary.lua
+QuizData.lua
+ItemSearch.lua
+HitSync.lua
+HitAlert.lua
+SocialExtras.lua
+CreditSafety.lua
+Social.lua
+Deaths.lua
+PvP.lua
+DeathPrompt.lua
+AimTrainer.lua
+Resize.lua
+SocialLayout.lua
+SocialUI.lua
+Summary.lua
+UI.lua

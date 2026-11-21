@@ -1,0 +1,7 @@
+*.zip
+*.bak
+*.log
+SavedVariables/
+WTF/
+work/
+__pycache__/
