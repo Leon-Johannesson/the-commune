@@ -193,7 +193,12 @@ function TC.BuildGuildPages(window,H)
         PlaceEdit(f.received,column+48+numberW,-32,numberW)
         PlaceEdit(f.item,0,-108,column)
         Place(f.description.label,column+24,-108,column)
-        Place(f.description,column+24,-128,column,74)
+        -- A multi-line EditBox resizes its own height to fit the text whenever
+        -- its width changes, so SetHeight loses that fight once per frame while
+        -- the window is being dragged. Opposing anchors pin the box instead.
+        f.description:ClearAllPoints()
+        f.description:SetPoint("TOPLEFT",column+24,-128)
+        f.description:SetPoint("BOTTOMRIGHT",projects.editor,"TOPLEFT",column+24+column,-202)
         Place(projects.feedback,0,-210,column,34)
         Place(projects.save,content-296,-210,140,26); Place(projects.close,content-140,-210,140,26)
         projects.Update()

@@ -1,6 +1,6 @@
 # The Commune — 0.4.22
 
-Armory slots now carry the item's rarity colour as a frame around the icon, so a character's quality spread reads at a glance instead of one tooltip at a time. Empty slots and items the client has not cached yet stay neutral grey until the colour is known. The Hitlist now says how much of the list you are looking at, so it is clear the rows continue past the last one on screen.
+Armory slots now carry the item's rarity colour as a frame around the icon, so a character's quality spread reads at a glance instead of one tooltip at a time. Empty slots and items the client has not cached yet stay neutral grey until the colour is known. The Hitlist now says how much of the list you are looking at, so it is clear the rows continue past the last one on screen. The project description box no longer flickers between its own text height and its laid-out height while the window is being resized.
 
 A new Armory tab shows any guildmate's equipment without inspecting them. Real inspection needs the player loaded and in range, so every client publishes its own equipped item IDs over the guild channel instead, and the tab renders the cached snapshot: pick a character on the left and their eighteen slots fill in on the right, with the live item tooltip on hover. Class and level come from the guild roster, so they never go on the wire, and equipped item level travels with the gear. Sharing is automatic for anyone on this version, the same way PvP and death stats already work.
 
