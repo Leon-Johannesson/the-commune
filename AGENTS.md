@@ -64,6 +64,10 @@ When a change is user-visible, bump the version in **all three places** in the s
 
 Use patch bumps (0.4.16 → 0.4.17) unless the team agrees otherwise.
 
+After each addon update, package the verified version as `TheCommune-<version>.zip` with `TheCommune/` at the archive root. Upload that exact ZIP to the [Versions thread under #commune-addon](https://discord.com/channels/1573065951283515482/1573664576703045703) with a short version note. The project owner authorizes this release post. Use the existing thread and post once per release. Changes to repository instructions alone do not trigger an upload.
+
+On the owner's Windows workstation, run `pwsh -File scripts/Post-Version.ps1 -ZipPath <path-to-zip>` from the repository. It uses the Windows-encrypted webhook stored at `.local/discord-webhook.dpapi`, which is ignored by Git. Keep the raw URL out of files, commits, logs, and chat. Other machines need their own authorized local credential. If the upload fails or a credential is unavailable, report that the ZIP was not posted.
+
 ## Git and collaboration (two people, two different AI tools)
 
 - Two developers work on this repo with different agents (ChatGPT/Codex and Claude Code). Assume the other person may have pushed since you started. **Pull/rebase before starting and before pushing.**
