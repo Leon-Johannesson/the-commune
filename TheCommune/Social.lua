@@ -199,6 +199,7 @@ local function Account(id) return type(id)=="string" and #id<=40 and id:match("^
 function TC.ReceiveSocial(message,sender)
     if TC.ReceiveHitCache(message,sender) then return true end
     if TC.ReceivePvP and TC.ReceivePvP(message,sender) then return true end
+    if TC.ReceiveGear and TC.ReceiveGear(message,sender) then return true end
     local f=Fields(message); local kind=f[1]
     if kind=="HL" or kind=="HD" then return TC.ReceiveHit(message,sender) end
     if kind~="FA" and kind~="FB" and kind~="FG" and kind~="FD" and kind~="FW" then return false end

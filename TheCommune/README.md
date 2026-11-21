@@ -1,4 +1,6 @@
-# The Commune — 0.4.20
+# The Commune — 0.4.21
+
+A new Armory tab shows any guildmate's equipment without inspecting them. Real inspection needs the player loaded and in range, so every client publishes its own equipped item IDs over the guild channel instead, and the tab renders the cached snapshot: pick a character on the left and their eighteen slots fill in on the right, with the live item tooltip on hover. Class and level come from the guild roster, so they never go on the wire, and equipped item level travels with the gear. Sharing is automatic for anyone on this version, the same way PvP and death stats already work.
 
 ## Minimap button (0.4.20)
 

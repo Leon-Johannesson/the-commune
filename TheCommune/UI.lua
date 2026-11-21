@@ -310,6 +310,7 @@ local function Build()
     window.feedback:SetTextColor(0.9, 0.8, 0.5)
     TC.BuildGuildPages(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
     TC.BuildHitlistPage(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
+    TC.BuildArmoryPage(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
     window.pageTabs={}
     TC.ShowPage=function(name)
         if name~="requests" and not window.guildPages[name] then return end
@@ -322,15 +323,16 @@ local function Build()
         for key,tab in pairs(window.pageTabs) do tab:SetEnabled(name~=key) end
         GameTooltip:Hide(); Layout()
         if TC.guildKey and changed and name=="hitlist" then TC.Query(); TC.BroadcastHitCache() end
+        if TC.guildKey and changed and name=="armory" then TC.Query(); TC.BroadcastGear(true) end
     end
-    for i,entry in ipairs({{"requests","Requests"},{"crafts","Crafts"},{"projects","Projects"},{"hitlist","Hitlist"}}) do
+    for i,entry in ipairs({{"requests","Requests"},{"crafts","Crafts"},{"projects","Projects"},{"hitlist","Hitlist"},{"armory","Armory"}}) do
         local key=entry[1]
         local tab=Button(window,entry[2],function() TC.ShowPage(key) end)
         Place(tab,24+(i-1)*120,-70,112,26); window.pageTabs[key]=tab
         tab:SetEnabled(key~="requests")
     end
     window.funButton=Button(window,"Guild fun",function() TC.OpenSocial("scores") end)
-    Place(window.funButton,504,-70,112,26)
+    Place(window.funButton,624,-70,112,26)
     window.socialHost=CreateFrame("Frame",nil,window)
     window.socialHost:SetPoint("TOPLEFT",12,-64); window.socialHost:SetPoint("BOTTOMRIGHT",-12,12); window.socialHost:Hide()
     window.back=Button(window,"Back to guild",function() TC.ShowPage(window.previousPage or "requests") end)

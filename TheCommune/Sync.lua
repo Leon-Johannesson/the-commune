@@ -90,6 +90,7 @@ function TC.BroadcastAll()
     if not TC.store then return end
     for slot in pairs(TC.store.owners[TC.owner]) do TC.BroadcastSlot(slot) end
     if TC.BroadcastGuildData then TC.BroadcastGuildData() end
+    if TC.BroadcastGear then TC.BroadcastGear(true) end
 end
 
 function TC.Query(manual)
