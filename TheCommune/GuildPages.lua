@@ -12,6 +12,7 @@ function TC.BuildGuildPages(window,H)
         page:EnableMouseWheel(true)
         page:SetScript("OnMouseWheel",function(_,delta) page.offset=page.offset-delta*3; page.Update() end)
         page.count=Label(page,"",0,0)
+        page.scrollBar=TC.AttachScrollBar(page,function(value) page.offset=value; page.Update() end)
         return page
     end
     local function Row(page,i)
@@ -32,6 +33,7 @@ function TC.BuildGuildPages(window,H)
             row.data=entry
             if entry then render(row,entry); row:Show() else row:Hide() end
         end
+        page.scrollBar.Refresh(#data,page.visible,page.offset)
     end
 
     local crafts=Page(); pages.crafts=crafts
@@ -76,14 +78,17 @@ function TC.BuildGuildPages(window,H)
         PlaceEdit(crafts.search,24,-106,content-250)
         Place(crafts.only,w-250,-122,26,26); Place(crafts.onlyLabel,w-218,-129,194)
         local recipeW,professionW=math.floor(content*0.42),math.floor(content*0.23)
+        -- Reserve the bar's gutter even when it is hidden, so rows keep their
+        -- width instead of reflowing as the result count crosses the page size.
+        local rowW=content-18
         Place(crafts.headers[1],54,-160,recipeW-36); Place(crafts.headers[2],24+recipeW,-160,professionW-10)
-        Place(crafts.headers[3],24+recipeW+professionW,-160,content-recipeW-professionW)
+        Place(crafts.headers[3],24+recipeW+professionW,-160,rowW-recipeW-professionW)
         crafts.visible=math.max(1,math.floor((h-225-182)/30))
         for i=1,crafts.visible do
             if not crafts.rows[i] then crafts.rows[i]=Row(crafts,i) end
-            local row=crafts.rows[i]; Place(row,24,-182-(i-1)*30,content,30)
+            local row=crafts.rows[i]; Place(row,24,-182-(i-1)*30,rowW,30)
             Place(row.icon,0,-4,22,22); Place(row.a,30,-9,recipeW-38)
-            Place(row.b,recipeW,-9,professionW-10); Place(row.c,recipeW+professionW,-9,content-recipeW-professionW)
+            Place(row.b,recipeW,-9,professionW-10); Place(row.c,recipeW+professionW,-9,rowW-recipeW-professionW)
             row:SetScript("OnEnter",function(self)
                 if self.data then
                     GameTooltip:SetOwner(self,"ANCHOR_RIGHT"); GameTooltip:SetHyperlink("spell:"..self.data.id)
@@ -93,6 +98,7 @@ function TC.BuildGuildPages(window,H)
                 end
             end)
         end
+        Place(crafts.scrollBar,24+rowW+6,-182,12,crafts.visible*30-4)
         Place(crafts.count,24,-h+213,content)
         Place(crafts.details,24,-h+186,content,148)
         crafts.details:SetFontObject("GameFontHighlightSmall")
@@ -177,16 +183,18 @@ function TC.BuildGuildPages(window,H)
         PlaceEdit(projects.search,24,-106,content-250)
         Place(projects.closed,w-224,-122,26,26); Place(projects.closedLabel,w-192,-129,168)
         local titleW,progressW=math.floor(content*0.48),math.floor(content*0.24)
+        local rowW=content-18
         Place(projects.headers[1],54,-160,titleW-36); Place(projects.headers[2],24+titleW,-160,progressW-10)
-        Place(projects.headers[3],24+titleW+progressW,-160,content-titleW-progressW)
+        Place(projects.headers[3],24+titleW+progressW,-160,rowW-titleW-progressW)
         local editorY=-h+290
         projects.visible=math.max(1,math.floor((h-290-28-182)/30))
         for i=1,projects.visible do
             if not projects.rows[i] then projects.rows[i]=Row(projects,i) end
-            local row=projects.rows[i]; Place(row,24,-182-(i-1)*30,content,30)
+            local row=projects.rows[i]; Place(row,24,-182-(i-1)*30,rowW,30)
             Place(row.icon,0,-4,22,22); Place(row.a,30,-9,titleW-38)
-            Place(row.b,titleW,-9,progressW-10); Place(row.c,titleW+progressW,-9,content-titleW-progressW)
+            Place(row.b,titleW,-9,progressW-10); Place(row.c,titleW+progressW,-9,rowW-titleW-progressW)
         end
+        Place(projects.scrollBar,24+rowW+6,-182,12,projects.visible*30-4)
         Place(projects.count,24,editorY+25,content)
         Place(projects.editor,24,editorY,content,270)
         PlaceEdit(f.title,0,-32,column); PlaceEdit(f.quantity,column+24,-32,numberW)

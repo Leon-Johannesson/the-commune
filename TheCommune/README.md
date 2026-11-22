@@ -1,4 +1,6 @@
-# The Commune — 0.4.25
+# The Commune — 0.4.26
+
+Crafts and Projects have the same scroll bar the Hitlist got, which matters most on Crafts where the catalog runs to over a thousand recipes. The bar moved into its own file rather than being copied, so all three pages share one implementation: drag the handle, or click the track to page toward the click.
 
 Closing a request now actually closes it. It used to delete the record outright, which is why Include closed had nothing to show: the row list skips deleted records before it ever considers that checkbox. A closed request keeps its item, amount and purpose and appears whenever Include closed is ticked. Selecting one of your own closed requests turns the same button into Delete request, so removing it for good is still one click, just a deliberate second one.
 
