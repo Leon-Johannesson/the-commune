@@ -9,12 +9,8 @@ end
 function TC.IsGuildMaster(owner)
     if not TC.guildKey then return false end
     if owner==TC.owner then local _,_,rank=GetGuildInfo("player"); return rank~=nil and rank==0 end
-    if GetNumGuildMembers and GetGuildRosterInfo then
-        for i=1,GetNumGuildMembers() do
-            local name,_,rank=GetGuildRosterInfo(i)
-            if TC.NormalizeName(name)==owner then return rank==0 end
-        end
-    end
+    local member=TC.GuildRoster()[owner]
+    if member then return member.rank==0 end
     return nil
 end
 function TC.WordReward(guesses) return ({5,3,2,1,1,1})[guesses] or 0 end

@@ -114,12 +114,9 @@ end
 -- Class and level are already on the guild roster, so they never go on the wire.
 function TC.GearRoster()
     local roster={}
-    if GetNumGuildMembers and GetGuildRosterInfo then
-        for index=1,(GetNumGuildMembers() or 0) do
-            local name,_,_,level,class,_,_,_,_,_,token=GetGuildRosterInfo(index)
-            local canonical=TC.NormalizeName(name)
-            if canonical then roster[canonical]={level=TC.Integer(level,1,255),class=class,token=token} end
-        end
+    -- Copy the shared scan so the player's own fallback cannot pollute it.
+    for canonical,member in pairs(TC.GuildRoster()) do
+        roster[canonical]={level=member.level,class=member.class,token=member.token}
     end
     local own=roster[TC.owner] or {}
     if not own.class then

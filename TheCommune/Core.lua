@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.27"
+TC.version = "0.4.28"
 TC.limit = 20
 
 function TC.Print(message)
@@ -47,20 +47,22 @@ function TC.NormalizeName(name)
     return name
 end
 
-local surnames, rosterLoaded = {}, false
+local roster, surnames, rosterLoaded = {}, {}, false
+TC.rosterGeneration = 0
 
--- Addon messages and UnitFullName sometimes deliver only the given name, so a
--- key can end in the CAMWOW physical realm instead of a surname. The guild
--- roster still spells out both parts; cache it until the roster changes.
-local function RosterSurnames()
-    if rosterLoaded or not GetNumGuildMembers or not GetGuildRosterInfo then return surnames end
+-- Rank, level, class and surname all used to be read by walking the whole
+-- roster and normalising every name, from functions the UI calls on each
+-- refresh. Scan once per roster change and let everyone read the result.
+local function Roster()
+    if rosterLoaded or not GetNumGuildMembers or not GetGuildRosterInfo then return roster, surnames end
     local count = GetNumGuildMembers()
-    if not count or count == 0 then return surnames end
-    surnames, rosterLoaded = {}, true
+    if not count or count == 0 then return roster, surnames end
+    roster, surnames, rosterLoaded = {}, {}, true
     for index = 1, count do
-        local name = GetGuildRosterInfo(index)
+        local name, _, rank, level, class, _, _, _, _, _, token = GetGuildRosterInfo(index)
         local canonical = TC.NormalizeName(name)
         if canonical then
+            roster[canonical] = {rank = rank, level = TC.Integer(level, 1, 255), class = class, token = token}
             local given, last = canonical:match("^([^-]+)%-(.+)$")
             if last and not last:match("^CAMWOW") then
                 -- Two guildmates can share a given name; it then names nobody.
@@ -69,7 +71,17 @@ local function RosterSurnames()
             end
         end
     end
-    return surnames
+    return roster, surnames
+end
+
+function TC.GuildRoster()
+    local members = Roster()
+    return members
+end
+
+local function RosterSurnames()
+    local _, names = Roster()
+    return names
 end
 
 function TC.Surname(canonical, given)
@@ -288,7 +300,7 @@ function TC.RefreshGuildMembership()
     if TC.store and not TC.guildKey then RefreshGuild(); RetryGuild() end
 end
 events:SetScript("OnEvent", function(_, event, arg)
-    if event == "GUILD_ROSTER_UPDATE" then rosterLoaded = false end
+    if event == "GUILD_ROSTER_UPDATE" then rosterLoaded = false; TC.rosterGeneration = TC.rosterGeneration + 1 end
     if event == "ADDON_LOADED" and arg == addonName then
         TheCommuneDB = TheCommuneDB or { version = 1, guilds = {} }
         TheCommuneDB.guilds = TheCommuneDB.guilds or {}

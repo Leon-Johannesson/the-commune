@@ -2,6 +2,17 @@ local _,TC=...
 local seeds={[2770]="Copper Ore",[2771]="Tin Ore",[2772]="Iron Ore",[2775]="Silver Ore",[2776]="Gold Ore",[3858]="Mithril Ore",[10620]="Thorium Ore", [2840]="Copper Bar",[3576]="Tin Bar",[2841]="Bronze Bar",[3575]="Iron Bar",[2589]="Linen Cloth",[2592]="Wool Cloth",[4306]="Silk Cloth",[4338]="Mageweave Cloth",[14047]="Runecloth"}
 local seedIDs={2318,2319,4234,4304,8170,2447,765,2449,785,2450,2452,2453,3355,3356,3357,3818,3821,3358,8838,8839,8845,8846,13463,13465,13466,13467,13468,2672,2673,5956,3860,12359,2842,3577,6037}
 local function Normalize(text) return (text or ""):match("^%s*(.-)%s*$"):gsub("%s+"," "):lower() end
+
+-- Both the suggestion list and the exact-name lookup walk the whole learned
+-- item index, and the edit box runs them on every keystroke. Normalising a
+-- name costs two pattern passes, so remember it per id and redo it only if
+-- the client later reports a different name for that item.
+local normalCache={}
+local function NormalName(id,name)
+    local cached=normalCache[id]
+    if not cached or cached[1]~=name then cached={name,Normalize(name)}; normalCache[id]=cached end
+    return cached[2]
+end
 function TC.LearnItem(id)
     if not TC.db or not TC.Integer(id,1,2147483647) then return end
     TC.db.itemIndex=TC.db.itemIndex or {}
@@ -36,9 +47,9 @@ function TC.SearchItems(query,limit)
     local results={}; query=Normalize(query)
     if query=="" or not TC.db then return results end
     for id,name in pairs(TC.db.itemIndex or {}) do
-        local normalized=Normalize(name)
-        if normalized:find(query,1,true) then
-            results[#results+1]={id=id,name=name,score=normalized==query and 0 or (normalized:sub(1,#query)==query and 1 or 2)}
+        local value=NormalName(id,name)
+        if value:find(query,1,true) then
+            results[#results+1]={id=id,name=name,score=value==query and 0 or (value:sub(1,#query)==query and 1 or 2)}
         end
     end
     table.sort(results,function(a,b) if a.score~=b.score then return a.score<b.score end
@@ -55,7 +66,7 @@ function TC.ResolveItem(text)
     local normalized=Normalize(text)
     if normalized=="" then return end
     local matches={}
-    for item,name in pairs(TC.db and TC.db.itemIndex or {}) do if Normalize(name)==normalized then matches[#matches+1]=item end end
+    for item,name in pairs(TC.db and TC.db.itemIndex or {}) do if NormalName(item,name)==normalized then matches[#matches+1]=item end end
     if #matches==1 then return matches[1] elseif #matches>1 then return end
     local name,link=C_Item.GetItemInfo(text)
     if name and Normalize(name)==normalized and type(link)=="string" then

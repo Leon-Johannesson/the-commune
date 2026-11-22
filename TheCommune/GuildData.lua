@@ -44,6 +44,8 @@ function TC.InitGuildData()
     TC.store.crafts[TC.owner] = TC.store.crafts[TC.owner] or { professions = {}, revision = 0 }
 end
 
+local officerRanks = {generation = -1}
+
 -- Officer privileges are a guild permission, not a specific rank number/name.
 -- The Blizzard guild rank editor's OfficerCheckbox uses permission flag 22.
 function TC.IsProjectOfficer(owner)
@@ -52,17 +54,23 @@ function TC.IsProjectOfficer(owner)
     if owner == TC.owner then
         local _, _, ownRank = GetGuildInfo("player")
         rank = ownRank
-    elseif GetNumGuildMembers and GetGuildRosterInfo then
-        for index = 1, GetNumGuildMembers() do
-            local name, _, rankIndex = GetGuildRosterInfo(index)
-            if TC.NormalizeName(name) == owner then rank = rankIndex; break end
-        end
+    else
+        local member = TC.GuildRoster()[owner]
+        rank = member and member.rank
     end
     if rank == nil then return nil end -- Wait for a usable roster; never trust the packet's claim.
     if rank == 0 then return true end
-    local flags = C_GuildInfo and Call(C_GuildInfo.GuildControlGetRankFlags, rank + 1)
-    if type(flags) ~= "table" then return nil end
-    return flags[22] == true
+    -- Rank flags are a per-rank property, so query them once per roster change
+    -- rather than on every permission check the UI makes while refreshing.
+    if officerRanks.generation ~= TC.rosterGeneration then officerRanks = {generation = TC.rosterGeneration} end
+    local known = officerRanks[rank]
+    if known == nil then
+        local flags = C_GuildInfo and Call(C_GuildInfo.GuildControlGetRankFlags, rank + 1)
+        if type(flags) ~= "table" then return nil end
+        known = flags[22] == true
+        officerRanks[rank] = known
+    end
+    return known
 end
 
 local function ProfessionName(id)
