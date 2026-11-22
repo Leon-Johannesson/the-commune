@@ -1,6 +1,14 @@
 local _, TC = ...
 local PREFIX = "TheCommune1"
-local queue, pending = {}, {}
+local function NewQueue()
+    return {head = 1, tail = 0}
+end
+
+local queue, craftQueue, pending = NewQueue(), NewQueue(), {}
+
+local function QueueLength()
+    return queue.tail - queue.head + craftQueue.tail - craftQueue.head + 2
+end
 local lastQuery, lastReply = -100, -100
 local peerSeen=false
 local sendInterval,lastThrottle,lastWarning=1,-1000,-1000
@@ -20,7 +28,7 @@ end
 
 local function SetStatus(text)
     TC.syncStatus = text
-    if TC.Refresh then TC.Refresh() end
+    if TC.RefreshSyncStatus then TC.RefreshSyncStatus() end
 end
 
 function TC.DebugSync()
@@ -31,7 +39,7 @@ function TC.DebugSync()
         restricted = ok and tostring(result) or "API error"
     end
     TC.Print("v" .. TC.version .. " | " .. tostring(TC.owner) .. " | Guild: " .. tostring(TC.guildKey or "none"))
-    TC.Print("Prefix: " .. stats.registered .. " | restriction flag: " .. restricted .. " | queued: " .. #queue)
+    TC.Print("Prefix: " .. stats.registered .. " | restriction flag: " .. restricted .. " | queued: " .. QueueLength())
     TC.Print("Sent: " .. stats.sent .. " | received: " .. stats.received .. " | applied: " .. stats.applied .. " | rejected: " .. stats.rejected)
     TC.Print("Last send: " .. stats.lastSend .. " | last peer: " .. (stats.peer or "none"))
     TC.Print("Send spacing: "..string.format("%.1f",sendInterval).."s | throttles: "..stats.throttled.." | guild addon peer: "..tostring(peerSeen))
@@ -74,7 +82,11 @@ end
 
 local function Enqueue(key, message)
     if not TC.guildKey then return end
-    if not pending[key] then queue[#queue + 1] = key end
+    if not pending[key] then
+        local target = key:sub(1,5)=="craft" and craftQueue or queue
+        target.tail = target.tail + 1
+        target[target.tail] = key
+    end
     pending[key] = message
 end
 TC.QueueGuildPacket = Enqueue
@@ -86,14 +98,18 @@ function TC.BroadcastSlot(slot)
     Enqueue(tostring(slot),TC.Encode(slot,r,true))
 end
 
+local function BroadcastRequests()
+    for slot in pairs(TC.store.owners[TC.owner]) do TC.BroadcastSlot(slot) end
+end
+
 function TC.BroadcastAll()
     if not TC.store then return end
-    for slot in pairs(TC.store.owners[TC.owner]) do TC.BroadcastSlot(slot) end
+    BroadcastRequests()
     if TC.BroadcastGuildData then TC.BroadcastGuildData() end
     if TC.BroadcastGear then TC.BroadcastGear(true) end
 end
 
-function TC.Query(manual)
+function TC.Query(manual, lightweight)
     if TC.CheckMailProgress then TC.CheckMailProgress() end
     if not TC.guildKey then TC.Print("Join a guild to share requests. Your personal board still works."); return end
     if GetTime() - lastQuery < 30 then
@@ -102,13 +118,21 @@ function TC.Query(manual)
     end
     lastQuery = GetTime()
     Enqueue("query", "Q\t1")
-    TC.BroadcastAll()
+    if lightweight then
+        -- Keep the legacy query so older peers can still answer. Our full
+        -- snapshot is sent at login, on a peer's query, or on manual sync.
+        BroadcastRequests()
+        if TC.BroadcastProjects then TC.BroadcastProjects() end
+    else
+        TC.BroadcastAll()
+    end
     SetStatus("Guild sync queued; waiting for responses")
     if manual then TC.Print("Guild sync queued. Allow a few seconds; /commune debug shows delivery details.") end
+    return true
 end
 
 function TC.ResetSync()
-    queue, pending = {}, {}
+    queue, craftQueue, pending = NewQueue(), NewQueue(), {}
     lastQuery, lastReply = -100, -100
     retryAt, retryDelay = 0, 2
     peerSeen=false; sendInterval=1; lastThrottle=-1000; lastWarning=-1000
@@ -129,7 +153,10 @@ function TC.Receive(prefix, message, channel, sender)
         if GetTime() - lastReply > 30 then
             lastReply = GetTime()
             -- Spread responses across the guild to avoid a login burst.
-            C_Timer.After(math.random() * 3, TC.BroadcastAll)
+            local guild = TC.guildKey
+            C_Timer.After(math.random() * 3, function()
+                if TC.guildKey == guild then TC.BroadcastAll() end
+            end)
         end
         return
     end
@@ -151,6 +178,9 @@ function TC.Receive(prefix, message, channel, sender)
         end
         TC.store.owners[sender][slot] = r
         stats.applied = stats.applied + 1
+        TC.RequestsChanged()
+        if not r.deleted and TC.LearnItem and not (TC.db.itemIndex and TC.db.itemIndex[r.item]) then TC.LearnItem(r.item) end
+        if TC.QueueRefresh then TC.QueueRefresh() end
         SetStatus("Received requests from " .. TC.DisplayName(sender))
     end
 end
@@ -175,15 +205,12 @@ function TC.StartSync()
         elapsed = elapsed + delta
         if elapsed < sendInterval then return end
         elapsed = 0
-        if #queue == 0 or not TC.guildKey or GetTime() < retryAt then return end
+        if QueueLength() == 0 or not TC.guildKey or GetTime() < retryAt then return end
         -- The general restriction flag is advisory: let the GUILD API's actual
         -- result decide whether this message is permitted. Do not change channels.
         -- Requests/projects should not wait behind a large recipe scan.
-        local queueIndex = 1
-        for i, queuedKey in ipairs(queue) do
-            if not queuedKey:match("^craft") then queueIndex=i; break end
-        end
-        local key = queue[queueIndex]
+        local target = queue.head <= queue.tail and queue or craftQueue
+        local key = target[target.head]
         local ok, result = pcall(C_ChatInfo.SendAddonMessage, PREFIX, pending[key], "GUILD")
         -- Modern clients return an enum; older builds may return nil or boolean.
         local success = ok and result ~= false
@@ -193,12 +220,17 @@ function TC.StartSync()
         stats.lastSend = ok and ResultName("SendAddonMessageResult", result) or TC.Clean(result, 160)
         if success then
             local recovering=retryAt>0
-            table.remove(queue, queueIndex); pending[key] = nil
+            target[target.head], pending[key] = nil, nil
+            if target.head == target.tail then
+                target.head, target.tail = 1, 0
+            else
+                target.head = target.head + 1
+            end
             stats.sent = stats.sent + 1
             retryAt, retryDelay = 0, 2
             if GetTime()-lastThrottle>60 then sendInterval=math.max(1,sendInterval-0.1) end
-            if recovering then SetStatus(#queue>0 and "Sharing queued guild updates" or "Guild updates sent")
-            elseif #queue == 0 and stats.received == 0 then SetStatus("Sent to guild; no peer response yet") end
+            if recovering then SetStatus(QueueLength()>0 and "Sharing queued guild updates" or "Guild updates sent")
+            elseif QueueLength() == 0 and stats.received == 0 then SetStatus("Sent to guild; no peer response yet") end
         else
             local values=Enum and Enum.SendAddonMessageResult or {}
             local throttled=ok and (result==3 or result==8 or

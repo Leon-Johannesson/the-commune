@@ -35,11 +35,9 @@ function TC.DebugCredits()
     if TC.db.creditRepair then TC.Print("Recorded-reward recoveries: "..#TC.db.creditRepair) end
     for old,recovery in pairs(TC.db.guildRecovery or {}) do TC.Print("Recovered guild record: "..old.." -> "..recovery.destination) end
 end
-local frame=CreateFrame("Frame"); frame:RegisterEvent("GUILD_ROSTER_UPDATE")
-frame:SetScript("OnEvent",function(_,event)
-    if event~="GUILD_ROSTER_UPDATE" then return end
+function TC.RetryDeferredCredits()
     for key,p in pairs(deferred) do
         if p.store~=TC.store or GetTime()-p.when>180 then deferred[key]=nil
         elseif TC.IsGuildMaster(p.sender)~=nil then deferred[key]=nil; TC.ReceiveSocial(p.message,p.sender) end
     end
-end)
+end

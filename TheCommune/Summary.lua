@@ -59,11 +59,16 @@ function TC.UpdateSummary()
         bubble.news:SetShown(#parts>0)
         local textHeight=#parts>1 and 30 or 16
         bubble.news:SetHeight(textHeight); bubble:SetSize(264,#parts>0 and 106+textHeight or 98)
-        local answered,done=TC.DailyProgress()
-        bubble.quiz:SetText("Quiz: "..answered.."/4")
-        bubble.wordle:SetText("Wordle: "..(done and "Done" or "To do"))
+        TC.UpdateSummaryDaily()
         if newArrival then bubble:Show() end
     end
+end
+
+function TC.UpdateSummaryDaily()
+    if not bubble or not TC.guildKey then return end
+    local answered,done=TC.DailyProgress()
+    bubble.quiz:SetText("Quiz: "..answered.."/4")
+    bubble.wordle:SetText("Wordle: "..(done and "Done" or "To do"))
 end
 
 function TC.DismissSummary()

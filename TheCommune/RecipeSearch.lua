@@ -16,7 +16,21 @@ end
 
 -- Game item class/subclass IDs keep English keyword aliases useful across locales.
 local weapons = {[0]="axe",[1]="axe",[2]="bow",[4]="mace",[5]="mace",[7]="sword",[8]="sword",[10]="staff",[15]="dagger"}
-local outputs = {}
+local outputs, pendingItems = {}, {}
+
+function TC.RecipeOutputDataReceived(id)
+    if not id or not pendingItems[id] then return false end
+    pendingItems[id] = nil
+    TC.InvalidateRecipeSearch()
+    return true
+end
+
+local function WaitForItem(itemID)
+    if not pendingItems[itemID] then
+        pendingItems[itemID] = true
+        TC.ItemName(itemID)
+    end
+end
 
 local function Output(recipeID, spellName)
     if outputs[recipeID] then return outputs[recipeID] end
@@ -30,17 +44,23 @@ local function Output(recipeID, spellName)
         local ok, link = pcall(api.GetRecipeItemLink, recipeID)
         if ok and type(link)=="string" then itemID = tonumber(link:match("item:(%d+)")) end
     end
-    if not itemID or not C_Item or not C_Item.GetItemInfoInstant then return end
+    if not TC.Integer(itemID,1,2147483647) or not C_Item or not C_Item.GetItemInfoInstant then return end
     local ok, id, kind, subtype, _, _, class, subclass = pcall(C_Item.GetItemInfoInstant, itemID)
-    if not ok or not id then return end
+    if not ok or not id then
+        WaitForItem(itemID)
+        return
+    end
     local category
     if class==1 or (class==6 and subclass==2) or (class==6 and subclass==3) then category="bag"
     elseif class==2 then category=weapons[subclass]
     elseif class==4 and subclass==6 then category="shield" end
     local name = C_Item.GetItemInfo and C_Item.GetItemInfo(itemID)
     local output = {category=category, weapon=class==2, text=table.concat({name or spellName,kind or "",subtype or ""}," "):lower()}
-    -- An uncached item name may become available on the next search.
-    if name then outputs[recipeID]=output end
+    if name then
+        outputs[recipeID]=output
+    else
+        WaitForItem(itemID)
+    end
     return output
 end
 

@@ -53,6 +53,7 @@ local function RecordGain(item, quantity, source, targets)
     if credited > 0 then
         tracking[source == "loot" and "loot" or "mail"] = tracking[source == "loot" and "loot" or "mail"] + credited
         tracking.last = credited .. " x " .. TC.ItemName(item) .. " from " .. source
+        TC.RequestsChanged()
         if TC.Refresh then TC.Refresh() end
     end
 end

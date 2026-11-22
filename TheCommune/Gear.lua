@@ -113,19 +113,14 @@ end
 
 -- Class and level are already on the guild roster, so they never go on the wire.
 function TC.GearRoster()
-    local roster={}
-    -- Copy the shared scan so the player's own fallback cannot pollute it.
-    for canonical,member in pairs(TC.GuildRoster()) do
-        roster[canonical]={level=member.level,class=member.class,token=member.token}
-    end
+    local roster=TC.GuildRoster()
     local own=roster[TC.owner] or {}
-    if not own.class then
-        local class,token=Safe(UnitClass,"player")
-        own.class,own.token=class,token
-    end
-    own.level=own.level or TC.Integer(Safe(UnitLevel,"player"),1,255)
-    roster[TC.owner]=own
-    return roster
+    if own.class and own.level then return roster, own end
+    -- Only the current character needs a fallback. Keep it outside the roster.
+    local class, token=own.class, own.token
+    if not class then class,token=Safe(UnitClass,"player") end
+    local level=own.level or TC.Integer(Safe(UnitLevel,"player"),1,255)
+    return roster, {class=class,token=token,level=level}
 end
 
 function TC.GearRows()

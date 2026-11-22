@@ -48,10 +48,8 @@ function TC.BuildGuildPages(window,H)
     crafts.Select=function(entry)
         crafts.selected=entry.id
         local lines={entry.name.."  |  "..entry.profession..(entry.requiredSkill and ("  |  Required skill: "..entry.requiredSkill) or "  |  Required skill unknown")}
-        for i,member in ipairs(TC.RecipeAvailabilityFor(entry)) do
-            if i<=8 then lines[#lines+1]=member.text end
-        end
         local availability=TC.RecipeAvailabilityFor(entry)
+        for i=1,math.min(8,#availability) do lines[#lines+1]=availability[i].text end
         if #availability>8 then lines[#lines+1]="More members listed in the recipe tooltip." end
         if #availability==0 then lines[#lines+1]="No guild profession data for this recipe yet." end
         if entry.source and entry.source~="" then lines[#lines+1]="Source: "..entry.source end
@@ -104,7 +102,6 @@ function TC.BuildGuildPages(window,H)
         Place(crafts.count,24,-h+213,content)
         Place(crafts.details,24,-h+186,content,148)
         crafts.details:SetFontObject("GameFontHighlightSmall")
-        crafts.Update()
     end
 
     local projects=Page(); pages.projects=projects
@@ -211,10 +208,7 @@ function TC.BuildGuildPages(window,H)
         f.description:SetPoint("BOTTOMRIGHT",projects.editor,"TOPLEFT",column+24+column,-202)
         Place(projects.feedback,0,-210,column,34)
         Place(projects.save,content-296,-210,140,26); Place(projects.close,content-140,-210,140,26)
-        projects.Update()
     end
     projects.Select(nil)
 
-    TC.LayoutGuildPages=function() for _,page in pairs(pages) do page.Layout() end end
-    TC.RefreshGuildPage=function() local page=pages[window.activePage]; if page then page.Update() end end
 end

@@ -30,9 +30,15 @@ end
 -- so the list is built once per data change and filtered from the cache after.
 local entryCache, rowCache = nil, nil
 function TC.InvalidateRecipes() entryCache, rowCache = nil, nil end
+function TC.InvalidateRecipeSearch() rowCache = nil end
 
-local function Refresh()
+local function RefreshRecipes()
     TC.InvalidateRecipes()
+    if TC.QueueRefresh then TC.QueueRefresh() end
+end
+
+local function RefreshProjects()
+    if TC.UpdateSummary then TC.UpdateSummary() end
     if TC.Refresh then TC.Refresh() end
 end
 
@@ -80,18 +86,25 @@ local function ProfessionName(id)
         (TC.store and TC.store.professionNames[id])
 end
 
+local pendingSpells = {}
+
 local function RecipeName(id)
     local info = C_Spell and Call(C_Spell.GetSpellInfo, id)
     if type(info) == "table" and info.name then return info.name, info.iconID or 134400 end
     local name = C_Spell and Call(C_Spell.GetSpellName, id)
     if name then return name, 134400 end
-    if C_Spell and C_Spell.RequestLoadSpellData then pcall(C_Spell.RequestLoadSpellData, id) end
+    if not pendingSpells[id] and C_Spell and C_Spell.RequestLoadSpellData then
+        pendingSpells[id] = pcall(C_Spell.RequestLoadSpellData, id) or nil
+    end
     return "Recipe #" .. id, 134400
 end
 
 local function AddCatalog(profession, recipes)
     for id in pairs(recipes) do
-        TC.store.catalog[id] = TC.store.catalog[id] or { profession = profession }
+        if not TC.store.catalog[id] then
+            TC.store.catalog[id] = {profession = profession}
+            TC.InvalidateRecipes()
+        end
     end
 end
 
@@ -160,14 +173,16 @@ function TC.ScanProfessions(manual)
     scanDiagnostics={}
     local api=C_TradeSkillUI
     if not api or not GetProfessions or not GetProfessionInfo then
-        TC.craftStatus="Profession API unavailable on this client."; Refresh(); return
+        TC.craftStatus="Profession API unavailable on this client."
+        if manual then TC.Print(TC.craftStatus) end
+        return
     end
     local changing=ScanCall("IsDataSourceChanging")
     local foreign=Call(api.IsTradeSkillLinked) or Call(api.IsTradeSkillGuild) or Call(api.IsTradeSkillGuildMember) or Call(api.IsNPCCrafting)
     if changing or foreign then
         TC.craftStatus=changing and "Profession data is changing; waiting for its recipe list." or "Linked/NPC profession view ignored. Open your own profession."
         if manual then TC.Print(TC.craftStatus) end
-        Refresh(); return
+        return
     end
     local mine=TC.store.crafts[TC.owner]
     local indices={GetProfessions()}
@@ -266,8 +281,14 @@ function TC.ScanProfessions(manual)
         TC.craftStatus=count.." learned recipes cached. "..(partial and "Visible recipes merged; clear profession filters to scan more." or "Own profession recipes scanned.")
     end
     if manual then TC.Print(TC.craftStatus) end
-    if changed then TC.BroadcastCrafts() end
-    Refresh()
+    if changed then
+        TC.BroadcastCrafts()
+        RefreshRecipes()
+    else
+        -- Opening a profession can expose output data for an existing recipe.
+        TC.InvalidateRecipeSearch()
+        if TC.QueueRefresh then TC.QueueRefresh() end
+    end
 end
 
 function TC.BroadcastCrafts()
@@ -305,18 +326,20 @@ local function BuildEntries()
         end
     end
     entryCache = {}
+    local professionNames = {}
     for id, entry in pairs(TC.store.catalog) do
         local names = {}
         for owner in pairs(crafters[id] or {}) do names[#names + 1] = TC.DisplayName(owner) end
         table.sort(names)
         local name, icon = RecipeName(id)
-        local profession = ProfessionName(entry.profession)
+        local profession = professionNames[entry.profession] or ProfessionName(entry.profession)
         if not profession then
             for _, profile in pairs(TC.store.crafts) do
                 if profile.professions[entry.profession] then profession = profile.professions[entry.profession].name; break end
             end
         end
         profession = profession or ("Profession #" .. entry.profession)
+        professionNames[entry.profession] = profession
         entryCache[#entryCache + 1] = {id=id, name=name, icon=icon, profession=profession, crafters=names,
             craftable=#names > 0, meta=entry, requiredSkill=entry.requiredSkill,
             sourceKind=entry.sourceKind, source=entry.source,
@@ -379,7 +402,7 @@ function TC.SaveProject(id, data)
     end
     TC.store.projects[id] = {revision=Revision(previous and previous.revision), writer=TC.owner,
         title=title, description=TC.Clean(data.description,240), item=item, quantity=quantity, received=received}
-    TC.BroadcastProject(id, TC.store.projects[id]); Refresh()
+    TC.BroadcastProject(id, TC.store.projects[id]); RefreshProjects()
     return id
 end
 
@@ -387,7 +410,7 @@ function TC.DeleteProject(id)
     if TC.IsProjectOfficer(TC.owner) ~= true or not TC.store.projects[id] then return nil, "Only guild officers can close projects." end
     local old = TC.store.projects[id]
     TC.store.projects[id] = {deleted=true,revision=Revision(old.revision),writer=TC.owner}
-    TC.BroadcastProject(id,TC.store.projects[id]); Refresh(); return true
+    TC.BroadcastProject(id,TC.store.projects[id]); RefreshProjects(); return true
 end
 
 function TC.ProjectRows(query, includeClosed)
@@ -423,13 +446,17 @@ function TC.BroadcastProject(id,p)
     end
 end
 
+function TC.BroadcastProjects()
+    if TC.IsProjectOfficer(TC.owner) == true then
+        for id,p in pairs(TC.store.projects) do TC.BroadcastProject(id,p) end
+    end
+end
+
 function TC.BroadcastGuildData()
     if TC.HasGuildPeer and not TC.HasGuildPeer() then return end
     TC.BroadcastCrafts()
     if TC.BroadcastSocial then TC.BroadcastSocial() end
-    if TC.IsProjectOfficer(TC.owner) == true then
-        for id,p in pairs(TC.store.projects) do TC.BroadcastProject(id,p) end
-    end
+    TC.BroadcastProjects()
 end
 
 local function ApplyProject(id,body,sender)
@@ -449,7 +476,7 @@ local function ApplyProject(id,body,sender)
     local old=TC.store.projects[id]
     if not old or revision>old.revision or (revision==old.revision and p.writer>old.writer) or
         (revision==old.revision and p.writer==old.writer and p.deleted and not old.deleted) then
-        TC.store.projects[id]=p; Refresh()
+        TC.store.projects[id]=p; RefreshProjects()
     end
 end
 
@@ -480,7 +507,7 @@ function TC.ReceiveGuildData(message,sender)
         if revision>profile.revision then
             profile.revision=revision; profile.roster=roster
             for id in pairs(profile.professions) do if not roster[id] then profile.professions[id]=nil end end
-            Refresh()
+            RefreshRecipes()
         end
         return true
     elseif kind=="CB" or kind=="CC" then
@@ -530,7 +557,7 @@ function TC.ReceiveGuildData(message,sender)
             if complete then
                 profile.professions[line]={revision=stage.revision,name=stage.name,rank=stage.rank,maxRank=stage.maxRank,recipes=recipes}
                 TC.store.professionNames[line]=stage.name
-                AddCatalog(line,recipes); craftStages[key]=nil; Refresh()
+                AddCatalog(line,recipes); craftStages[key]=nil; RefreshRecipes()
             end
         end
         return true
@@ -564,21 +591,29 @@ function TC.StartGuildData()
 end
 
 local frame=CreateFrame("Frame")
-for _,event in ipairs({"TRADE_SKILL_SHOW","TRADE_SKILL_LIST_UPDATE","TRADE_SKILL_DATA_SOURCE_CHANGED","NEW_RECIPE_LEARNED","SKILL_LINES_CHANGED","SPELLS_CHANGED","GUILD_ROSTER_UPDATE","GUILD_RANKS_UPDATE","SPELL_DATA_LOAD_RESULT"}) do
+for _,event in ipairs({"TRADE_SKILL_SHOW","TRADE_SKILL_LIST_UPDATE","TRADE_SKILL_DATA_SOURCE_CHANGED","NEW_RECIPE_LEARNED","SKILL_LINES_CHANGED","SPELLS_CHANGED","SPELL_DATA_LOAD_RESULT"}) do
     pcall(frame.RegisterEvent,frame,event)
 end
-frame:SetScript("OnEvent",function(_,event)
-    if not TC.store then return end
-    if event=="GUILD_ROSTER_UPDATE" or event=="GUILD_RANKS_UPDATE" then
-        for id,p in pairs(deferred) do
-            if p.store==TC.store and GetTime()-p.when<180 and TC.IsProjectOfficer(p.sender)~=nil then
-                ApplyProject(id,p.body,p.sender); deferred[id]=nil
-            elseif p.store~=TC.store or GetTime()-p.when>=180 then deferred[id]=nil end
+function TC.RetryDeferredProjects()
+    for id,p in pairs(deferred) do
+        if p.store~=TC.store or GetTime()-p.when>=180 then
+            deferred[id]=nil
+        elseif TC.IsProjectOfficer(p.sender)~=nil then
+            deferred[id]=nil
+            ApplyProject(id,p.body,p.sender)
         end
-        Refresh()
-    elseif event=="SPELL_DATA_LOAD_RESULT" then Refresh()
+    end
+end
+
+frame:SetScript("OnEvent",function(_,event,id,success)
+    if not TC.store then return end
+    if event=="SPELL_DATA_LOAD_RESULT" then
+        if id and pendingSpells[id] then
+            pendingSpells[id]=nil
+            if success~=false then RefreshRecipes() end
+        end
     elseif not scanScheduled then
-        if event=="TRADE_SKILL_LIST_UPDATE" or event=="TRADE_SKILL_SHOW" then TC.ScanProfessions() end
-        scanScheduled=true; C_Timer.After(0.4,function() scanScheduled=false; TC.ScanProfessions() end)
+        scanScheduled=true
+        C_Timer.After(0.4,function() scanScheduled=false; TC.ScanProfessions() end)
     end
 end)

@@ -130,14 +130,20 @@ local function CreateRow(i)
     return row
 end
 
+function TC.RefreshSyncStatus()
+    if window and window:IsShown() and window.activePage~="social" then
+        window.status:SetText(TC.syncStatus)
+    end
+end
+
 function TC.Refresh()
-    if TC.UpdateSummary then TC.UpdateSummary() end
     if not window or not window:IsShown() or not TC.store or not window.ready then return end
     if not TC.ApplyGuildAvailability(window) then editingSlot=nil; selected=nil; return end
     if window.guildStateChanged then window.guildStateChanged=false; LoadSelection(nil); Layout(); return end
     if window.activePage=="social" then TC.RefreshSocialWindow(); return end
     if window.activePage~="requests" then
-        if TC.RefreshGuildPage then TC.RefreshGuildPage() end
+        local page = window.guildPages[window.activePage]
+        if page then page.Update() end
         window.status:SetText(TC.syncStatus)
         return
     end
@@ -145,21 +151,30 @@ function TC.Refresh()
         local r = TC.store.owners[TC.owner][editingSlot]
         -- Keep an open editor current without replacing a manual correction.
         if r and not r.deleted and fields.received:GetText() == loadedReceived then
-            fields.received:SetText(tostring(r.received))
-            loadedReceived = fields.received:GetText()
+            local received = tostring(r.received)
+            if received ~= loadedReceived then
+                fields.received:SetText(received)
+                loadedReceived = received
+            end
         end
     end
     rows = TC.Rows(filter, window.search:GetText(), window.closed:GetChecked())
     offset = math.max(0, math.min(offset, math.max(0, #rows - visibleRows)))
+    local items = {}
     for i, row in ipairs(list) do
         local entry = i <= visibleRows and rows[offset + i] or nil
         if entry then
             row.entry = entry
             local r = entry.request
-            local name, _, texture = TC.ItemName(r.item)
-            row.owner:SetText(TC.DisplayName(entry.owner))
-            row.icon:SetTexture(texture or 134400)
-            row.item:SetText(name)
+            local item = entry.item or items[r.item]
+            if not item then
+                local name, _, icon = TC.ItemName(r.item)
+                item = {name = name, icon = icon}
+                items[r.item] = item
+            end
+            row.owner:SetText(entry.displayName)
+            row.icon:SetTexture(item.icon or 134400)
+            row.item:SetText(item.name)
             row.need:SetText(not TC.IsActive(r) and "Closed" or
                 (math.max(0, r.quantity - r.received) .. (r.item == TC.GOLD and "g" or "")))
             row.purpose:SetText(r.purpose)
@@ -170,6 +185,17 @@ function TC.Refresh()
     window.count:SetText(#rows .. " requests" .. (#rows > visibleRows and "  |  Scroll for more" or ""))
     window.status:SetText(TC.syncStatus)
     for name, button in pairs(filterButtons) do button:SetEnabled(filter ~= name) end
+end
+
+local refreshQueued
+function TC.QueueRefresh()
+    if refreshQueued or not window or not window:IsShown() then return end
+    refreshQueued = true
+    C_Timer.After(0, function()
+        refreshQueued = false
+        TC.Refresh()
+        if window:IsShown() and window.activePage == "requests" then UpdateItem() end
+    end)
 end
 
 Layout = function()
@@ -186,6 +212,12 @@ Layout = function()
     if window.activePage=="social" then
         if TC.LayoutSocial then TC.LayoutSocial() end
         TC.Refresh(); return
+    end
+    local page = window.guildPages[window.activePage]
+    if page then
+        page.Layout()
+        TC.Refresh()
+        return
     end
     PlaceEdit(window.search, 292, -104, width - 492)
     Place(window.closed, width - 180, -120, 26, 26)
@@ -221,7 +253,6 @@ Layout = function()
     Place(window.feedback, 0, -179, content - 324, 32)
     Place(window.save, content - 296, -172, 140, 26)
     Place(window.delete, content - 140, -172, 140, 26)
-    if window.activePage~="requests" and TC.LayoutGuildPages then TC.LayoutGuildPages() end
     TC.Refresh()
 end
 
@@ -339,8 +370,8 @@ local function Build()
         for key,page in pairs(window.guildPages) do page:SetShown(name==key) end
         for key,tab in pairs(window.pageTabs) do tab:SetEnabled(name~=key) end
         GameTooltip:Hide(); Layout()
-        if TC.guildKey and changed and name=="hitlist" then TC.Query(); TC.BroadcastHitCache() end
-        if TC.guildKey and changed and name=="armory" then TC.Query(); TC.BroadcastGear(true) end
+        if TC.guildKey and changed and name=="hitlist" then TC.Query(false, true); TC.BroadcastHitCache() end
+        if TC.guildKey and changed and name=="armory" then TC.Query(false, true); TC.BroadcastGear(true) end
     end
     for i,entry in ipairs({{"requests","Requests"},{"crafts","Crafts"},{"projects","Projects"},{"hitlist","Hitlist"},{"armory","Armory"}}) do
         local key=entry[1]
@@ -375,18 +406,18 @@ local function Build()
         if window.resizing then window.layoutPending=true else Layout() end
     end)
     window:SetScript("OnHide", function() StopSizing(); GameTooltip:Hide() end)
-    window:SetScript("OnShow", TC.Refresh)
+    window:SetScript("OnShow", function()
+        TC.Refresh()
+        if window.ready and window.activePage == "requests" then UpdateItem() end
+    end)
     if ChatEdit_InsertLink then
         hooksecurefunc("ChatEdit_InsertLink", function(link)
             if window:IsShown() and window.save:IsEnabled() and fields.item:HasFocus() then fields.item:SetText(link) end
         end)
     end
-    local elapsed = 0
-    window:SetScript("OnUpdate", function(_, delta)
+    window:SetScript("OnUpdate", function()
         TC.StepWindowResize(window,StopSizing)
         if window.layoutPending then window.layoutPending=false; Layout() end
-        elapsed=elapsed+delta
-        if elapsed>=5 and not window.resizing then elapsed=0; TC.Refresh(); UpdateItem() end
     end)
     TC.RememberWindow(window,"main",TC.db.ui,false)
     window.ready = true

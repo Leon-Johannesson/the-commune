@@ -29,7 +29,7 @@ function TC.BuildArmoryPage(window,H)
     local a=CreateFrame("Frame",nil,window); a:SetAllPoints(window); a:Hide(); a.offset=0
 
     a.sync=Button(a,"Sync armory",function()
-        TC.Query(true); TC.BroadcastGear(true)
+        if not TC.Query(true) then TC.BroadcastGear(true) end
         a.message:SetText("Armory sync queued. Guildmates answer over the next few seconds.")
     end)
     a.rows={}
@@ -73,13 +73,13 @@ function TC.BuildArmoryPage(window,H)
         local store=TC.GearStore() or {}
         local visible=a.visible or 9
         a.offset=math.min(a.offset,math.max(0,#rows-visible))
-        local roster=TC.GearRoster()
+        local roster, own=TC.GearRoster()
         if a.selected and not store[a.selected] then a.selected=nil end
         if not a.selected and rows[1] then a.selected=rows[1].owner end
         for i,b in ipairs(a.rows) do
             local entry=i<=visible and rows[a.offset+i]; b.owner=entry and entry.owner
             if entry then
-                local who=roster[entry.owner] or {}
+                local who=entry.owner==TC.owner and own or roster[entry.owner] or {}
                 b:SetText((entry.owner==a.selected and "> " or "")..entry.label.."  -  "..(who.level and ("Lv "..who.level) or "?").."  -  ilvl "..(entry.gear.ilvl or 0))
                 b:Show()
             else b:Hide() end
@@ -106,7 +106,7 @@ function TC.BuildArmoryPage(window,H)
             end
         end
         if snapshot then
-            local who=roster[a.selected] or {}
+            local who=a.selected==TC.owner and own or roster[a.selected] or {}
             a.title:SetText(TC.DisplayName(a.selected))
             a.subtitle:SetText((who.class or "Unknown class").."  |  Level "..(who.level or "?").."  |  Equipped item level "..(snapshot.ilvl or 0).."  |  Updated "..Ago(snapshot.when))
         else
@@ -141,7 +141,6 @@ function TC.BuildArmoryPage(window,H)
             Place(entry.button,x,y,32,32)
             Place(entry.label,x+38,y+9,column-42,16)
         end
-        a.Update()
     end
 
     window.guildPages.armory=a

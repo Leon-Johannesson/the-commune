@@ -1,4 +1,8 @@
-# The Commune — 0.4.28
+# The Commune — 0.4.29
+
+## Less work during refresh and sync (0.4.29)
+
+Crafts refreshes when recipe data changes and redraws once per resize step. Item search indexes exact names and ranks only the suggestions it needs. The login summary updates when requests, projects, or daily games change. Automatic board syncs send requests and projects without pushing another local profession snapshot. Login, manual sync, and replies to guildmates still support full catch-up. Guild membership and rank changes clear cached permissions before pending updates are checked.
 
 A pass over the rest of the addon for the same kind of repeated work the Crafts tab had. Rank, level, class and surname each used to walk the entire guild roster and normalise every name, from checks the windows run on every refresh; there is now a single roster scan per roster change that all of them read. Guild rank permissions are asked for once per rank instead of once per check. The item box no longer re-normalises every learned item name on each keystroke.
 

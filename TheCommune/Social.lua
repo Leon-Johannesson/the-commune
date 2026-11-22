@@ -92,7 +92,7 @@ function TC.PublishSocial(send)
 end
 local function Changed()
     TC.wallet.revision=Rev(TC.wallet.revision); TC.PublishSocial(true)
-    if TC.Refresh then TC.Refresh() end
+    if TC.UpdateSummaryDaily then TC.UpdateSummaryDaily() end
     if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
 end
 function TC.AnswerQuiz(slot,choice)
@@ -344,7 +344,7 @@ frame:SetScript("OnUpdate",function(_,delta)
     local day=TC.DayID()
     if day~=lastDay then
         lastDay=day; TC.PublishSocial(false)
-        if TC.UpdateSummary then TC.UpdateSummary() end
+        if TC.UpdateSummaryDaily then TC.UpdateSummaryDaily() end
         if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
     end
     local flying=TC.guildKey~=nil and Safe(UnitOnTaxi,"player")==true

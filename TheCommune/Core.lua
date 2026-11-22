@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.28"
+TC.version = "0.4.29"
 TC.limit = 20
 
 function TC.Print(message)
@@ -50,11 +50,16 @@ end
 local roster, surnames, rosterLoaded = {}, {}, false
 TC.rosterGeneration = 0
 
+local function InvalidateRoster()
+    roster, surnames, rosterLoaded = {}, {}, false
+    TC.rosterGeneration = TC.rosterGeneration + 1
+end
+
 -- Rank, level, class and surname all used to be read by walking the whole
 -- roster and normalising every name, from functions the UI calls on each
 -- refresh. Scan once per roster change and let everyone read the result.
 local function Roster()
-    if rosterLoaded or not GetNumGuildMembers or not GetGuildRosterInfo then return roster, surnames end
+    if not TC.guildKey or rosterLoaded or not GetNumGuildMembers or not GetGuildRosterInfo then return roster, surnames end
     local count = GetNumGuildMembers()
     if not count or count == 0 then return roster, surnames end
     roster, surnames, rosterLoaded = {}, {}, true
@@ -138,6 +143,7 @@ function TC.SetGuild(onlyIfChanged)
     if TC.guildPending and TC.guildKey then return false end
     local changed=not TC.store or TC.guildKey~=guildKey
     if onlyIfChanged and not changed then return false end
+    if changed then InvalidateRoster() end
     TC.guildKey=guildKey
     if guildKey then TC.MergeEmptyRealmGuild(guild,guildKey) end
     -- Personal drafts work outside a guild and never leak into the next guild.
@@ -148,6 +154,7 @@ function TC.SetGuild(onlyIfChanged)
     TC.store.owners[TC.owner] = TC.store.owners[TC.owner] or {}
     if TC.RegisterCharacter then TC.RegisterCharacter() end
     if TC.InitGuildData then TC.InitGuildData() end
+    if TC.InvalidateRecipes then TC.InvalidateRecipes() end
     if TC.InitSocial then TC.InitSocial() end
     if not TC.guildKey and TC.HideFlightPanel then TC.HideFlightPanel() end
     if not TC.guildKey and TC.HideDeathPrompt then TC.HideDeathPrompt() end
@@ -159,6 +166,7 @@ function TC.SetGuild(onlyIfChanged)
             r.revision = math.max(time(), r.revision + 1)
         end
     end
+    TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
     return changed
 end
@@ -173,27 +181,50 @@ end
 -- item, instead of rejecting a packet whose field count they do not know.
 TC.GOLD = 2147483647
 
+local pendingItems = {}
+
 function TC.ItemName(id)
     if not id then return "Drop an item" end
     if id == TC.GOLD then return "Gold", nil, "Interface\\Icons\\INV_Misc_Coin_01" end
     local name, link, quality, _, _, _, _, _, _, texture = C_Item.GetItemInfo(id)
-    if not name and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
+    if not name and not pendingItems[id] and C_Item.RequestLoadItemDataByID then
+        pendingItems[id] = true
+        C_Item.RequestLoadItemDataByID(id)
+    end
     -- Quality is a trailing return so existing callers keep working unchanged.
     return name or ("Item #" .. id), link or ("item:" .. id), texture or 134400, quality
+end
+
+local activeRequestsByItem
+
+function TC.RequestsChanged()
+    activeRequestsByItem = nil
+    if TC.UpdateSummary and TC.wallet then TC.UpdateSummary() end
 end
 
 function TC.Rows(filter, query, includeClosed)
     local rows = {}
     if not TC.store then return rows end
     query = (query or ""):lower()
+    local itemNames = {}
     for owner, slots in pairs(TC.store.owners) do
-        for slot, r in pairs(slots) do
-            if not r.deleted and (includeClosed or TC.IsActive(r)) then
-                local name = TC.ItemName(r.item)
-                local matches = filter ~= "mine" or owner == TC.owner
-                local haystack = (owner .. " " .. TC.DisplayName(owner) .. " " .. name .. " " .. r.purpose):lower()
-                if matches and (query == "" or haystack:find(query, 1, true)) then
-                    rows[#rows + 1] = { owner = owner, slot = slot, request = r }
+        if filter ~= "mine" or owner == TC.owner then
+            local displayName
+            for slot, r in pairs(slots) do
+                if not r.deleted and (includeClosed or TC.IsActive(r)) then
+                    displayName = displayName or TC.DisplayName(owner)
+                    local item
+                    if query ~= "" then
+                        item = itemNames[r.item]
+                        if not item then
+                            local name, _, icon = TC.ItemName(r.item)
+                            item = {name = name, icon = icon}
+                            itemNames[r.item] = item
+                        end
+                    end
+                    if not item or (owner .. " " .. displayName .. " " .. item.name .. " " .. r.purpose):lower():find(query, 1, true) then
+                        rows[#rows + 1] = {owner = owner, slot = slot, request = r, displayName = displayName, item = item}
+                    end
                 end
             end
         end
@@ -222,6 +253,7 @@ function TC.Save(slot, data)
         created = editingExisting and previous and TC.IsActive(previous) and previous.item==item and (previous.created or previous.revision) or revision,
         purpose = TC.Clean(data.purpose, 64), craft = "", delivery = TC.Clean(data.delivery, 40) }
     TC.BroadcastSlot(slot)
+    TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
     return slot
 end
@@ -236,6 +268,7 @@ function TC.Close(slot)
     r.received = r.quantity
     r.revision = math.max(time(), r.revision + 1)
     TC.BroadcastSlot(slot)
+    TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
 end
 
@@ -244,20 +277,30 @@ function TC.Delete(slot)
     if not r then return end
     TC.store.owners[TC.owner][slot] = { deleted = true, revision = math.max(time(), r.revision + 1) }
     TC.BroadcastSlot(slot)
+    TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
 end
 
 local function AddTooltip(tooltip, data)
     if not TC.store or not data or not data.id then return end
     if issecretvalue and issecretvalue(data.id) then return end
-    local matches = {}
-    for owner, slots in pairs(TC.store.owners) do
-        for _, r in pairs(slots) do
-            if TC.IsActive(r) and r.item == data.id then matches[#matches + 1] = { owner = owner, r = r } end
+    if not activeRequestsByItem then
+        activeRequestsByItem = {}
+        for owner, slots in pairs(TC.store.owners) do
+            for _, r in pairs(slots) do
+                if TC.IsActive(r) then
+                    local matches = activeRequestsByItem[r.item] or {}
+                    matches[#matches + 1] = {owner = owner, r = r}
+                    activeRequestsByItem[r.item] = matches
+                end
+            end
+        end
+        for _, matches in pairs(activeRequestsByItem) do
+            table.sort(matches, function(a, b) return a.owner < b.owner end)
         end
     end
-    if #matches == 0 then return end
-    table.sort(matches, function(a, b) return a.owner < b.owner end)
+    local matches = activeRequestsByItem[data.id]
+    if not matches then return end
     tooltip:AddLine(" ")
     tooltip:AddLine("The Commune - Guild requests", 0.47, 0.84, 0.68)
     for i = 1, math.min(#matches, 8) do
@@ -277,7 +320,7 @@ events:RegisterEvent("PLAYER_GUILD_UPDATE")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:RegisterEvent("GUILD_ROSTER_UPDATE")
 events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-events:RegisterEvent("BAG_UPDATE_DELAYED")
+pcall(events.RegisterEvent, events, "GUILD_RANKS_UPDATE")
 events:RegisterEvent("MERCHANT_SHOW")
 local function RefreshGuild()
     local previous=TC.guildKey
@@ -299,8 +342,11 @@ end
 function TC.RefreshGuildMembership()
     if TC.store and not TC.guildKey then RefreshGuild(); RetryGuild() end
 end
-events:SetScript("OnEvent", function(_, event, arg)
-    if event == "GUILD_ROSTER_UPDATE" then rosterLoaded = false; TC.rosterGeneration = TC.rosterGeneration + 1 end
+events:SetScript("OnEvent", function(_, event, arg, success)
+    if event == "GUILD_ROSTER_UPDATE" or event == "GUILD_RANKS_UPDATE" then
+        InvalidateRoster()
+        if TC.InvalidateRecipes then TC.InvalidateRecipes() end
+    end
     if event == "ADDON_LOADED" and arg == addonName then
         TheCommuneDB = TheCommuneDB or { version = 1, guilds = {} }
         TheCommuneDB.guilds = TheCommuneDB.guilds or {}
@@ -321,10 +367,20 @@ events:SetScript("OnEvent", function(_, event, arg)
         else TC.Print("Item tooltip API unavailable on this client.") end
         TC.Print("v" .. TC.version .. " loaded. Type /commune to open the guild board.")
     elseif event == "MERCHANT_SHOW" and TC.store then
-        if TC.guildKey then TC.Query() end
+        if TC.guildKey then TC.Query(false, true) end
     elseif event == "PLAYER_GUILD_UPDATE" and TC.db and (arg == "player" or not arg) then
         if TC.store then RefreshGuild(); RetryGuild() end
-    elseif TC.store and (event=="PLAYER_ENTERING_WORLD" or (event=="GUILD_ROSTER_UPDATE" and (not TC.guildKey or TC.guildKey:sub(1,1)==":"))) then
+    elseif TC.store and event == "PLAYER_ENTERING_WORLD" then
         RefreshGuild()
-    elseif TC.Refresh then TC.Refresh() end
+    elseif TC.store and (event == "GUILD_ROSTER_UPDATE" or event == "GUILD_RANKS_UPDATE") then
+        if not TC.guildKey or TC.guildKey:sub(1,1)==":" then RefreshGuild() end
+        if TC.RetryDeferredProjects then TC.RetryDeferredProjects() end
+        if TC.RetryDeferredCredits then TC.RetryDeferredCredits() end
+        if TC.Refresh then TC.Refresh() end
+    elseif event == "GET_ITEM_INFO_RECEIVED" then
+        local waiting = pendingItems[arg]
+        if arg then pendingItems[arg] = nil end
+        local recipeChanged = TC.RecipeOutputDataReceived and TC.RecipeOutputDataReceived(arg)
+        if success ~= false and (waiting or recipeChanged) and TC.QueueRefresh then TC.QueueRefresh() end
+    end
 end)

@@ -73,7 +73,6 @@ function TC.BuildHitlistPage(window,H)
         for i,b in ipairs({h.target,h.new,h.save,h.remove}) do Place(b,left+(i-1)*(buttonWidth+8),formY+64,buttonWidth,28) end
         Place(h.sound,left,formY+102,26,26); Place(h.soundLabel,left+32,formY+108,150,18)
         Place(h.message,left+188,formY+103,content-188,48)
-        h.Update()
     end
     window.guildPages.hitlist=h
     TC.RefreshHitlist=function()

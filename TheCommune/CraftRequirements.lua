@@ -43,16 +43,19 @@ function TC.SetRecipeMetadata(id,line,required,kind,source)
     if not TC.store then return end
     local entry=TC.store.catalog[id]
     if entry and entry.profession~=line then return end
-    entry=entry or {profession=line}; TC.store.catalog[id]=entry
+    local newEntry = not entry
+    entry=entry or {profession=line}
     required=TC.Integer(required,1,10000) or entry.requiredSkill
     kind=kind and kind>0 and kind or entry.sourceKind or 0
     if entry.sourceKind==1 then kind=1 end -- A confirmed trainer is an available alternative to a pattern.
     source=source and source~="" and CleanSource(source) or entry.source or ""
     if not required and kind==0 and source=="" then return end
+    if newEntry then TC.store.catalog[id]=entry end
     if entry.requiredSkill~=required or entry.sourceKind~=kind or entry.source~=source then
         entry.requiredSkill,entry.sourceKind,entry.source=required,kind,source
         entry.metaRevision=math.max(time(),(entry.metaRevision or 0)+1)
         entry.metaWriter=TC.owner
+        if TC.InvalidateRecipes then TC.InvalidateRecipes() end
         return true
     end
 end
@@ -94,7 +97,7 @@ function TC.ReceiveRecipeMetadata(message,sender)
         -- This writes the catalog without going through GuildData's Refresh,
         -- so the cached recipe list has to be dropped explicitly.
         if TC.InvalidateRecipes then TC.InvalidateRecipes() end
-        if TC.Refresh then TC.Refresh() end
+        if TC.QueueRefresh then TC.QueueRefresh() end
     end
 end
 
@@ -192,8 +195,9 @@ function TC.ScanTrainerRequirements()
         end
     end
     if changed then
+        if TC.InvalidateRecipes then TC.InvalidateRecipes() end
         TC.BroadcastCrafts()
-        if TC.Refresh then TC.Refresh() end
+        if TC.QueueRefresh then TC.QueueRefresh() end
     end
 end
 

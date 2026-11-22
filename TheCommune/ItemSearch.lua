@@ -3,58 +3,97 @@ local seeds={[2770]="Copper Ore",[2771]="Tin Ore",[2772]="Iron Ore",[2775]="Silv
 local seedIDs={2318,2319,4234,4304,8170,2447,765,2449,785,2450,2452,2453,3355,3356,3357,3818,3821,3358,8838,8839,8845,8846,13463,13465,13466,13467,13468,2672,2673,5956,3860,12359,2842,3577,6037}
 local function Normalize(text) return (text or ""):match("^%s*(.-)%s*$"):gsub("%s+"," "):lower() end
 
--- Both the suggestion list and the exact-name lookup walk the whole learned
--- item index, and the edit box runs them on every keystroke. Normalising a
--- name costs two pattern passes, so remember it per id and redo it only if
--- the client later reports a different name for that item.
-local normalCache={}
-local function NormalName(id,name)
-    local cached=normalCache[id]
-    if not cached or cached[1]~=name then cached={name,Normalize(name)}; normalCache[id]=cached end
-    return cached[2]
+local normalized, exactNames = {}, {}
+
+local function IndexName(id, name)
+    local previous = normalized[id]
+    local key = Normalize(name)
+    if key == previous then return end
+    if previous then
+        local old = exactNames[previous]
+        old[id] = nil
+        if not next(old) then exactNames[previous] = nil end
+    end
+    local matches = exactNames[key] or {}
+    matches[id] = true
+    exactNames[key], normalized[id] = matches, key
+end
+
+local function StoreName(id, name)
+    local index = TC.db.itemIndex
+    if index[id] ~= name then
+        index[id] = name
+        IndexName(id, name)
+    end
 end
 function TC.LearnItem(id)
-    if not TC.db or not TC.Integer(id,1,2147483647) then return end
+    if not TC.db or id==TC.GOLD or not TC.Integer(id,1,2147483647) then return end
     TC.db.itemIndex=TC.db.itemIndex or {}
     local name=C_Item.GetItemInfo(id)
-    if name then TC.db.itemIndex[id]=name
+    if name then StoreName(id,name)
     elseif C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
 end
 function TC.InitItemSearch()
     TC.db.itemIndex=TC.db.itemIndex or {}
+    normalized, exactNames = {}, {}
+    for id,name in pairs(TC.db.itemIndex) do IndexName(id,name) end
     for id,name in pairs(seeds) do
-        if not TC.db.itemIndex[id] then TC.db.itemIndex[id]=name end
+        if not TC.db.itemIndex[id] then StoreName(id,name) end
         TC.LearnItem(id)
     end
     for _,id in ipairs(seedIDs) do TC.LearnItem(id) end
     TC.ScanBagItems()
+    if TC.store then
+        for _,slots in pairs(TC.store.owners) do
+            for _,r in pairs(slots) do
+                if not r.deleted and not TC.db.itemIndex[r.item] then TC.LearnItem(r.item) end
+            end
+        end
+    end
 end
+
 function TC.ScanBagItems()
     if not TC.db then return end
+    local index = TC.db.itemIndex
+    local seen = {}
     if C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerItemInfo then
         for bag=0,(NUM_BAG_SLOTS or 4) do
             for slot=1,C_Container.GetContainerNumSlots(bag) do
                 local info=C_Container.GetContainerItemInfo(bag,slot)
-                if info and info.itemID then TC.LearnItem(info.itemID) end
+                local id = info and info.itemID
+                if id and not index[id] and not seen[id] then
+                    seen[id] = true
+                    TC.LearnItem(id)
+                end
             end
         end
     end
-    if TC.store then
-        for _,slots in pairs(TC.store.owners) do for _,r in pairs(slots) do if not r.deleted then TC.LearnItem(r.item) end end end
-    end
 end
+
+local function ComesBefore(score, name, id, other)
+    if score~=other.score then return score<other.score end
+    if name~=other.name then return name<other.name end
+    return id<other.id
+end
+
 function TC.SearchItems(query,limit)
-    local results={}; query=Normalize(query)
-    if query=="" or not TC.db then return results end
-    for id,name in pairs(TC.db.itemIndex or {}) do
-        local value=NormalName(id,name)
-        if value:find(query,1,true) then
-            results[#results+1]={id=id,name=name,score=value==query and 0 or (value:sub(1,#query)==query and 1 or 2)}
+    local results={}; query=Normalize(query); limit=math.floor(limit or 6)
+    if query=="" or not TC.db or limit<1 then return results end
+    for id,value in pairs(normalized) do
+        local start=value:find(query,1,true)
+        if start then
+            local name=TC.db.itemIndex[id]
+            local score=value==query and 0 or (start==1 and 1 or 2)
+            if #results<limit or ComesBefore(score,name,id,results[limit]) then
+                local position=math.min(#results+1,limit)
+                while position>1 and ComesBefore(score,name,id,results[position-1]) do
+                    results[position]=results[position-1]
+                    position=position-1
+                end
+                results[position]={id=id,name=name,score=score}
+            end
         end
     end
-    table.sort(results,function(a,b) if a.score~=b.score then return a.score<b.score end
-        if a.name==b.name then return a.id<b.id end; return a.name<b.name end)
-    while #results>(limit or 6) do table.remove(results) end
     return results
 end
 function TC.ResolveItem(text)
@@ -65,9 +104,12 @@ function TC.ResolveItem(text)
     if id then TC.LearnItem(id); return id end
     local normalized=Normalize(text)
     if normalized=="" then return end
-    local matches={}
-    for item,name in pairs(TC.db and TC.db.itemIndex or {}) do if NormalName(item,name)==normalized then matches[#matches+1]=item end end
-    if #matches==1 then return matches[1] elseif #matches>1 then return end
+    local matches=exactNames[normalized]
+    if matches then
+        local id=next(matches)
+        if not next(matches,id) then return id end
+        return
+    end
     local name,link=C_Item.GetItemInfo(text)
     if name and Normalize(name)==normalized and type(link)=="string" then
         id=tonumber(link:match("item:(%d+)")); if id then TC.LearnItem(id); return id end
@@ -90,9 +132,14 @@ function TC.AttachItemSearch(box,parent,onChange)
         end); buttons[i]=b
     end
     local function Changed()
-        onChange(TC.ResolveItem(box:GetText()))
-        local data=TC.SearchItems(box:GetText(),6)
-        if not box:HasFocus() or not box:IsEnabled() or tonumber(box:GetText()) or box:GetText():find("item[:=]%d+") or #data==0 then popup:Hide(); return end
+        local text=box:GetText()
+        local item=TC.ResolveItem(text)
+        onChange(item)
+        if not box:HasFocus() or not box:IsEnabled() or item==TC.GOLD or tonumber(text) or text:find("item[:=]%d+") then
+            popup:Hide(); return
+        end
+        local data=TC.SearchItems(text,6)
+        if #data==0 then popup:Hide(); return end
         popup:SetWidth(math.max(260,math.min(420,box:GetWidth()+5))); popup:SetHeight(#data*24+16)
         for i,b in ipairs(buttons) do
             local entry=data[i]; b.entry=entry
@@ -115,7 +162,8 @@ frame:SetScript("OnEvent",function(_,event,id,success)
     if not TC.db then return end
     if event=="BAG_UPDATE_DELAYED" then TC.ScanBagItems()
     elseif success then
-        local name=C_Item.GetItemInfo(id); if name then TC.db.itemIndex=TC.db.itemIndex or {}; TC.db.itemIndex[id]=name end
+        local name=C_Item.GetItemInfo(id)
+        if name then TC.db.itemIndex=TC.db.itemIndex or {}; StoreName(id,name) end
     end
 end)
 

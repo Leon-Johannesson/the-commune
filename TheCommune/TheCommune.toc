@@ -2,7 +2,7 @@
 ## Title: The Commune
 ## Notes: Guild requests, crafts, projects, hitlist, Social Credits, and daily games.
 ## Author: The Commune
-## Version: 0.4.28
+## Version: 0.4.29
 ## SavedVariables: TheCommuneDB
 
 Core.lua
