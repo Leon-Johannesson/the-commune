@@ -48,11 +48,12 @@ function TC.BuildGuildPages(window,H)
     crafts.Select=function(entry)
         crafts.selected=entry.id
         local lines={entry.name.."  |  "..entry.profession..(entry.requiredSkill and ("  |  Required skill: "..entry.requiredSkill) or "  |  Required skill unknown")}
-        for i,member in ipairs(entry.availability or {}) do
+        for i,member in ipairs(TC.RecipeAvailabilityFor(entry)) do
             if i<=8 then lines[#lines+1]=member.text end
         end
-        if #(entry.availability or {})>8 then lines[#lines+1]="More members listed in the recipe tooltip." end
-        if #(entry.availability or {})==0 then lines[#lines+1]="No guild profession data for this recipe yet." end
+        local availability=TC.RecipeAvailabilityFor(entry)
+        if #availability>8 then lines[#lines+1]="More members listed in the recipe tooltip." end
+        if #availability==0 then lines[#lines+1]="No guild profession data for this recipe yet." end
         if entry.source and entry.source~="" then lines[#lines+1]="Source: "..entry.source end
         crafts.details:SetText(table.concat(lines,"\n"))
     end
@@ -61,8 +62,9 @@ function TC.BuildGuildPages(window,H)
         local data=TC.RecipeRows(crafts.search:GetText(),crafts.only:GetChecked())
         Fill(crafts,data,function(row,entry)
             row.icon:SetTexture(entry.icon); row.a:SetText(entry.name); row.b:SetText(entry.profession)
+            local availability=not entry.craftable and TC.RecipeAvailabilityFor(entry) or nil
             row.c:SetText(entry.craftable and table.concat(entry.crafters,", ") or
-                (entry.availability and entry.availability[1] and entry.availability[1].short or "No confirmed crafter"))
+                (availability[1] and availability[1].short or "No confirmed crafter"))
             row.c:SetTextColor(entry.craftable and 0.47 or 0.6,entry.craftable and 0.84 or 0.6,entry.craftable and 0.68 or 0.6)
             if crafts.selected==entry.id then crafts.Select(entry) end
         end)
@@ -92,7 +94,7 @@ function TC.BuildGuildPages(window,H)
             row:SetScript("OnEnter",function(self)
                 if self.data then
                     GameTooltip:SetOwner(self,"ANCHOR_RIGHT"); GameTooltip:SetHyperlink("spell:"..self.data.id)
-                    for _,member in ipairs(self.data.availability or {}) do GameTooltip:AddLine(member.text,0.85,0.85,0.85,true) end
+                    for _,member in ipairs(TC.RecipeAvailabilityFor(self.data)) do GameTooltip:AddLine(member.text,0.85,0.85,0.85,true) end
                     if self.data.source and self.data.source~="" then GameTooltip:AddLine("Source: "..self.data.source,0.85,0.85,0.85,true) end
                     GameTooltip:Show()
                 end

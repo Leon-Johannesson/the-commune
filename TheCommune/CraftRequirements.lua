@@ -91,6 +91,9 @@ function TC.ReceiveRecipeMetadata(message,sender)
         entry=entry or {profession=line}; TC.store.catalog[id]=entry
         entry.requiredSkill=required>0 and required or nil
         entry.sourceKind,entry.source,entry.metaRevision,entry.metaWriter=kind,CleanSource(source),revision,sender
+        -- This writes the catalog without going through GuildData's Refresh,
+        -- so the cached recipe list has to be dropped explicitly.
+        if TC.InvalidateRecipes then TC.InvalidateRecipes() end
         if TC.Refresh then TC.Refresh() end
     end
 end

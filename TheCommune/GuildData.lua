@@ -24,7 +24,15 @@ local function ValidRevision(value)
     return n and n <= time() + 86400 and n or nil
 end
 
+-- Building the recipe list walks the whole catalog, asking the client for a
+-- spell name and a profession name per entry. TC.Refresh runs on every synced
+-- packet, every item-info event and once per frame while the window resizes,
+-- so the list is built once per data change and filtered from the cache after.
+local entryCache, rowCache = nil, nil
+function TC.InvalidateRecipes() entryCache, rowCache = nil, nil end
+
 local function Refresh()
+    TC.InvalidateRecipes()
     if TC.Refresh then TC.Refresh() end
 end
 
@@ -275,9 +283,9 @@ function TC.BroadcastCrafts()
     end
 end
 
-function TC.RecipeRows(query, onlyCraftable)
-    local result, crafters = {}, {}
-    query = (query or ""):match("^%s*(.-)%s*$"):lower()
+local function BuildEntries()
+    if entryCache then return entryCache end
+    local crafters = {}
     for owner, profile in pairs(TC.store.crafts) do
         for _, profession in pairs(profile.professions) do
             for id, learned in pairs(profession.recipes) do
@@ -288,6 +296,7 @@ function TC.RecipeRows(query, onlyCraftable)
             end
         end
     end
+    entryCache = {}
     for id, entry in pairs(TC.store.catalog) do
         local names = {}
         for owner in pairs(crafters[id] or {}) do names[#names + 1] = TC.DisplayName(owner) end
@@ -300,15 +309,37 @@ function TC.RecipeRows(query, onlyCraftable)
             end
         end
         profession = profession or ("Profession #" .. entry.profession)
-        local text = (name .. " " .. profession .. " " .. table.concat(names, " ")):lower()
-        if (not onlyCraftable or #names > 0) and TC.RecipeMatches(query,text,name,id) then
-            local availability=TC.RecipeAvailability and TC.RecipeAvailability(id,entry) or {}
-            result[#result + 1] = {id=id, name=name, icon=icon, profession=profession, crafters=names, craftable=#names > 0,
-                availability=availability,requiredSkill=entry.requiredSkill,sourceKind=entry.sourceKind,source=entry.source}
+        entryCache[#entryCache + 1] = {id=id, name=name, icon=icon, profession=profession, crafters=names,
+            craftable=#names > 0, meta=entry, requiredSkill=entry.requiredSkill,
+            sourceKind=entry.sourceKind, source=entry.source,
+            text=(name .. " " .. profession .. " " .. table.concat(names, " ")):lower()}
+    end
+    table.sort(entryCache, function(a,b) if a.craftable ~= b.craftable then return a.craftable end
+        if a.name == b.name then return a.id < b.id end return a.name < b.name end)
+    return entryCache
+end
+
+-- Availability is a pass over every crafter, so it waits until a row is shown
+-- or hovered. The result rides on the entry and dies with the cache.
+function TC.RecipeAvailabilityFor(entry)
+    if not entry.availability then
+        entry.availability = (TC.RecipeAvailability and TC.RecipeAvailability(entry.id, entry.meta)) or {}
+    end
+    return entry.availability
+end
+
+function TC.RecipeRows(query, onlyCraftable)
+    query = (query or ""):match("^%s*(.-)%s*$"):lower()
+    onlyCraftable = onlyCraftable and true or false
+    if rowCache and rowCache.query == query and rowCache.only == onlyCraftable then return rowCache.result end
+    local result = {}
+    -- Entries are already in display order, so the filter keeps it.
+    for _, entry in ipairs(BuildEntries()) do
+        if (not onlyCraftable or entry.craftable) and TC.RecipeMatches(query, entry.text, entry.name, entry.id) then
+            result[#result + 1] = entry
         end
     end
-    table.sort(result, function(a,b) if a.craftable ~= b.craftable then return a.craftable end
-        if a.name == b.name then return a.id < b.id end return a.name < b.name end)
+    rowCache = {query=query, only=onlyCraftable, result=result}
     return result
 end
 

@@ -1,4 +1,6 @@
-# The Commune — 0.4.26
+# The Commune — 0.4.27
+
+The Crafts tab no longer stutters. It was rebuilding the whole recipe catalog on every refresh, asking the client for a spell name and a profession name for each of its a thousand-plus entries and working out guild availability for every row, and a refresh happens on each synced packet, each item-info event and once per frame while the window is resized. The catalog is now built once per change to guild data and filtered from that, and a recipe's availability is worked out only when its row is actually shown or hovered.
 
 Crafts and Projects have the same scroll bar the Hitlist got, which matters most on Crafts where the catalog runs to over a thousand recipes. The bar moved into its own file rather than being copied, so all three pages share one implementation: drag the handle, or click the track to page toward the click.
 
