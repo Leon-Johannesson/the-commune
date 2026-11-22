@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.23"
+TC.version = "0.4.24"
 TC.limit = 20
 
 function TC.Print(message)
@@ -155,8 +155,15 @@ function TC.IsActive(r)
     return r and not r.deleted and r.received < r.quantity
 end
 
+-- Gold is not an item, so a request for it rides the existing item field under
+-- a sentinel no real item can reach. That keeps the R packet exactly as it is:
+-- older clients still accept the request and merely name it as an unknown
+-- item, instead of rejecting a packet whose field count they do not know.
+TC.GOLD = 2147483647
+
 function TC.ItemName(id)
     if not id then return "Drop an item" end
+    if id == TC.GOLD then return "Gold", nil, "Interface\\Icons\\INV_Misc_Coin_01" end
     local name, link, quality, _, _, _, _, _, _, texture = C_Item.GetItemInfo(id)
     if not name and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(id) end
     -- Quality is a trailing return so existing callers keep working unchanged.

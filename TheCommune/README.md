@@ -1,4 +1,6 @@
-# The Commune — 0.4.23
+# The Commune — 0.4.24
+
+Requests can now ask for gold. Type `gold` in the item field and set Target to the amount; the row shows what is still owed with a g after it. Gold is not an item, so it travels in the existing item field under a reserved value no real item can use, which keeps the request packet unchanged: guildmates on older versions still receive the request and simply name it as an unknown item.
 
 The Hitlist has a real scroll bar beside its rows: drag the handle, or click the track to page toward the click. The handle's length shows how much of the list fits on screen. Its gutter is reserved even while the bar is hidden, so rows keep their width as entries come and go.
 

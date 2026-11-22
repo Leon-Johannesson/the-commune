@@ -48,6 +48,8 @@ function TC.SearchItems(query,limit)
 end
 function TC.ResolveItem(text)
     text=(text or ""):match("^%s*(.-)%s*$")
+    -- "gold" names the sentinel so a money request needs no second input.
+    if text:lower()=="gold" or text:lower()=="g" then return TC.GOLD end
     local id=tonumber(text:match("item[:=](%d+)")) or TC.Integer(text,1,2147483647)
     if id then TC.LearnItem(id); return id end
     local normalized=Normalize(text)
