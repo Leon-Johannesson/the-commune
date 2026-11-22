@@ -1,4 +1,6 @@
-# The Commune — 0.4.24
+# The Commune — 0.4.25
+
+Closing a request now actually closes it. It used to delete the record outright, which is why Include closed had nothing to show: the row list skips deleted records before it ever considers that checkbox. A closed request keeps its item, amount and purpose and appears whenever Include closed is ticked. Selecting one of your own closed requests turns the same button into Delete request, so removing it for good is still one click, just a deliberate second one.
 
 Requests can now ask for gold. Type `gold` in the item field and set Target to the amount; the row shows what is still owed with a g after it. Gold is not an item, so it travels in the existing item field under a reserved value no real item can use, which keeps the request packet unchanged: guildmates on older versions still receive the request and simply name it as an unknown item.
 

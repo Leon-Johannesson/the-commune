@@ -57,11 +57,21 @@ local function StopSizing()
     SaveGeometry()
 end
 
+-- One button, two stages: an open request closes, a closed one can then be
+-- deleted for good. Keeps the editor's button row as it is.
+local function UpdateCloseButton()
+    local slots = TC.store and TC.store.owners[TC.owner]
+    local r = editingSlot and slots and slots[editingSlot]
+    window.deleteClosed = (r and not r.deleted and not TC.IsActive(r)) and true or false
+    window.delete:SetText(window.deleteClosed and "Delete request" or "Close request")
+end
+
 local function SetEditable(editable)
     for _, field in pairs(fields) do field:SetEnabled(editable) end
     window.save:SetEnabled(editable)
     window.delete:SetEnabled(editable and editingSlot ~= nil)
     window.itemSlot:SetEnabled(editable)
+    UpdateCloseButton()
 end
 
 local function UpdateItem()
@@ -298,13 +308,19 @@ local function Build()
         if slot then
             editingSlot = slot; selected = TC.owner .. ":" .. slot
             loadedReceived = fields.received:GetText()
-            window.delete:Enable(); window.editorTitle:SetText("Request by " .. TC.DisplayName(TC.owner))
+            window.delete:Enable(); UpdateCloseButton()
+            window.editorTitle:SetText("Request by " .. TC.DisplayName(TC.owner))
             window.feedback:SetText("Saved. " .. (TC.guildKey and "Queued for guild sharing." or "Personal request."))
             TC.Refresh()
         else window.feedback:SetText(err) end
     end)
     window.delete = Button(window.editor, "Close request", function()
-        if editingSlot then TC.Delete(editingSlot); LoadSelection(nil); window.feedback:SetText("Request closed.") end
+        if not editingSlot then return end
+        local removing = window.deleteClosed
+        if removing then TC.Delete(editingSlot) else TC.Close(editingSlot) end
+        LoadSelection(nil)
+        window.feedback:SetText(removing and "Request deleted." or
+            "Request closed. Tick Include closed to see it, then delete it for good.")
     end)
     window.feedback = Label(window.editor, "", 0, 0)
     window.feedback:SetWordWrap(true); window.feedback:SetJustifyV("TOP"); window.feedback:SetFontObject("GameFontHighlightSmall")

@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.24"
+TC.version = "0.4.25"
 TC.limit = 20
 
 function TC.Print(message)
@@ -212,6 +212,19 @@ function TC.Save(slot, data)
     TC.BroadcastSlot(slot)
     if TC.Refresh then TC.Refresh() end
     return slot
+end
+
+function TC.Close(slot)
+    local r = TC.store.owners[TC.owner][slot]
+    if not r or r.deleted then return end
+    -- Closing retires the request without tombstoning it, so "Include closed"
+    -- still has something to show and the purpose survives. received==quantity
+    -- is the only closed state the R packet can express, which leaves the wire
+    -- format untouched and reads the same on older clients.
+    r.received = r.quantity
+    r.revision = math.max(time(), r.revision + 1)
+    TC.BroadcastSlot(slot)
+    if TC.Refresh then TC.Refresh() end
 end
 
 function TC.Delete(slot)
