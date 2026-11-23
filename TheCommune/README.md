@@ -1,4 +1,8 @@
-# The Commune — 0.4.29
+# The Commune — 0.4.30
+
+## Craft filters (0.4.30)
+
+Use the Profession and Crafter dropdowns alongside the Crafts search. Pick a guildmate to see the recipes they can make, or choose Craftable by guild to see recipes any guildmate can make.
 
 ## Less work during refresh and sync (0.4.29)
 
