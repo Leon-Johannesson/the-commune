@@ -65,6 +65,7 @@ function TC.MergeEmptyRealmGuild(guild,key)
     for owner,p in pairs(old and old.social and old.social.pvp or {}) do
         target.social=target.social or {}; target.social.pvp=target.social.pvp or {}
         local current=target.social.pvp[owner] or Copy(p); target.social.pvp[owner]=current
+        if TC.MergeDeathZones then TC.MergeDeathZones(current,p.deathZones) end
         if p.honorKills~=nil then current.honorKills=math.max(current.honorKills or 0,p.honorKills); current.honorRevision=math.max(current.honorRevision or 0,p.honorRevision or 0) end
         if p.deaths~=nil and (not current.deathsLifetime or p.deathsLifetime) then
             current.deaths=math.max(current.deaths or 0,p.deaths); current.deathsLifetime=current.deathsLifetime or p.deathsLifetime

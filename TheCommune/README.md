@@ -1,4 +1,8 @@
-# The Commune — 0.4.34
+# The Commune — 0.4.35
+
+## Death counts by zone (0.4.35)
+
+The addon now saves a per-character count of deaths from any cause in each zone or instance. It records the location when the character dies, then shares the counts through normal guild sync. Zone totals start with this release. The data is saved for a future display.
 
 ## A mixed five-question daily quiz (0.4.34)
 

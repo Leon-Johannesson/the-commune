@@ -107,6 +107,7 @@ function TC.BroadcastAll()
     BroadcastRequests()
     if TC.BroadcastGuildData then TC.BroadcastGuildData() end
     if TC.BroadcastGear then TC.BroadcastGear(true) end
+    if TC.BroadcastDeathZones then TC.BroadcastDeathZones() end
 end
 
 function TC.Query(manual, lightweight)

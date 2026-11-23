@@ -1,5 +1,110 @@
 local _,TC=...
 local active=false
+
+local function Readable(value)
+    if not (issecretvalue and issecretvalue(value)) then return value end
+end
+
+local function Safe(fn,...)
+    if type(fn)~="function" then return end
+    local ok,value=pcall(fn,...)
+    if ok then return Readable(value) end
+end
+
+local function ZoneName(value)
+    value=Readable(value)
+    if type(value)~="string" then return "" end
+    return TC.Clean(value,80)
+end
+
+local function DeathZone()
+    if type(GetInstanceInfo)=="function" then
+        local ok,name,kind,_,_,_,_,_,id=pcall(GetInstanceInfo)
+        kind,id=Readable(kind),TC.Integer(Readable(id),1,2147483647)
+        if ok and type(kind)=="string" and kind~="" and kind~="none" and id then
+            name=ZoneName(name)
+            return "instance:"..id,name~="" and name or ("Instance #"..id)
+        end
+    end
+    if C_Map then
+        local id=TC.Integer(Safe(C_Map.GetBestMapForUnit,"player"),1,2147483647)
+        local zoneType=Enum and Enum.UIMapType and Enum.UIMapType.Zone or 3
+        -- An outdoor subzone can have its own map. Record the parent zone.
+        for _=1,8 do
+            if not id then break end
+            local info=Safe(C_Map.GetMapInfo,id)
+            if type(info)~="table" or (issecrettable and issecrettable(info)) then break end
+            if Readable(info.mapType)==zoneType then
+                local name=ZoneName(info.name)
+                return "map:"..id,name~="" and name or ("Zone #"..id)
+            end
+            local parent=TC.Integer(Readable(info.parentMapID),1,2147483647)
+            if parent==id then break end
+            id=parent
+        end
+    end
+    local name=ZoneName(Safe(GetZoneText))
+    if name=="" then name=ZoneName(Safe(GetRealZoneText)) end
+    if name~="" then return "name:"..name,name end
+    return "unknown","Unknown zone"
+end
+
+local function SaveZone(profile,key,entry)
+    profile.deathZones=profile.deathZones or {}
+    local previous=profile.deathZones[key]
+    if not previous or (entry.revision>=previous.revision and entry.count>=previous.count and
+        (entry.revision>previous.revision or entry.count>previous.count)) then
+        profile.deathZones[key]=entry
+    end
+end
+
+function TC.MergeDeathZones(profile,zones)
+    for key,entry in pairs(zones or {}) do SaveZone(profile,key,entry) end
+end
+
+local function BroadcastZone(key,entry)
+    TC.QueueGuildPacket("death-zone:"..key,table.concat({"PZ",key,entry.revision,entry.count,entry.name},"\t"))
+end
+
+function TC.BroadcastDeathZones()
+    if not TC.guildKey or not TC.HasGuildPeer() then return end
+    local profiles=TC.db.fun and TC.db.fun.pvp
+    local p=profiles and profiles[TC.owner]
+    for key,entry in pairs(p and p.deathZones or {}) do BroadcastZone(key,entry) end
+end
+
+local function RecordDeathZone(profile)
+    -- Snapshot immediately, before releasing can move the player to a graveyard.
+    local key,name=DeathZone()
+    profile.deathZones=profile.deathZones or {}
+    local old=profile.deathZones[key]
+    local entry={name=name,count=(old and old.count or 0)+1,revision=math.max(time(),(old and old.revision or 0)+1)}
+    profile.deathZones[key]=entry
+    if TC.guildKey then BroadcastZone(key,entry) end
+end
+
+local function DeathProfile(sender)
+    local all=TC.store.social.pvp
+    all[sender]=all[sender] or {revision=0,total=0,fair=0,higher=0,below3=0,below6=0,below10=0,unknown=0,diffs={}}
+    return all[sender]
+end
+
+local function ReceiveZone(message,sender)
+    if #message>254 then return end
+    local key,revision,count,name=message:match("^PZ\t([^\t]+)\t(%d+)\t(%d+)\t([^\t]+)$")
+    revision=TC.Integer(revision,1,time()+86400)
+    count=TC.Integer(count,1,999999999)
+    name=ZoneName(name)
+    if not revision or not count or name=="" or not key or #key>85 then return end
+    if key=="unknown" then
+        name="Unknown zone"
+    elseif key~="name:"..name then
+        local kind,id=key:match("^(%l+):([1-9]%d*)$")
+        if (kind~="map" and kind~="instance") or not TC.Integer(id,1,2147483647) then return end
+    end
+    SaveZone(DeathProfile(sender),key,{name=name,count=count,revision=revision})
+end
+
 local function NativeDeaths()
     if type(GetStatistic)~="function" then return end
     local ok,value=pcall(GetStatistic,60)
@@ -26,13 +131,13 @@ function TC.BroadcastDeaths(p)
     if p.deaths~=nil then TC.QueueGuildPacket("pvp-deaths",table.concat({"PT",p.deathRevision or 0,p.deaths,p.deathsLifetime and 1 or 0},"\t")) end
 end
 function TC.ReceiveDeaths(message,sender)
-    if message:sub(1,3)~="PT\t" then return false end
+    local kind=message:sub(1,3)
+    if kind=="PZ\t" then ReceiveZone(message,sender); return true end
+    if kind~="PT\t" then return false end
     local revision,count,source=message:match("^PT\t(%d+)\t(%d+)\t([01])$")
     revision=TC.Integer(revision,0,time()+86400); count=TC.Integer(count,0,999999999)
     if not revision or not count then return true end
-    local all=TC.store.social.pvp
-    all[sender]=all[sender] or {revision=0,total=0,fair=0,higher=0,below3=0,below6=0,below10=0,unknown=0,diffs={}}
-    local p=all[sender]
+    local p=DeathProfile(sender)
     if revision>=(p.deathRevision or 0) then p.deaths=count; p.deathRevision=revision; p.deathsLifetime=source=="1" end
     if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end; return true
 end
@@ -44,6 +149,7 @@ events:SetScript("OnEvent",function(_,event)
     if event=="PLAYER_DEAD" then
         if active then return end; active=true
         p.deathsObserved=(p.deathsObserved or 0)+1
+        RecordDeathZone(p)
         if not p.deathsLifetime and NativeDeaths()==nil then p.deaths=nil end
         local owner,store=TC.owner,TC.store
         C_Timer.After(1,function() if TC.owner==owner and TC.store==store then TC.RefreshDeathStats(true) end end)
