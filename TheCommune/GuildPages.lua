@@ -1,6 +1,6 @@
 local _, TC = ...
 
-local function CraftFilterMenu(page, H, onChoose)
+local function CrafterMenu(page, H, onChoose)
     local shield=CreateFrame("Button",nil,page)
     shield:SetAllPoints(page)
     shield:SetFrameStrata("FULLSCREEN_DIALOG")
@@ -31,7 +31,7 @@ local function CraftFilterMenu(page, H, onChoose)
     for i=1,maxRows do
         local row=H.Button(menu,"",function(self)
             shield:Hide()
-            onChoose(menu.filter,self.option.value)
+            onChoose(self.option.value)
         end)
         row:SetHeight(rowHeight)
         row.label=H.Label(row,"",0,0)
@@ -54,7 +54,7 @@ local function CraftFilterMenu(page, H, onChoose)
                 row:ClearAllPoints()
                 row:SetPoint("TOPLEFT",menu,"TOPLEFT",4,-4-(i-1)*rowHeight)
                 row:SetPoint("TOPRIGHT",menu,"TOPRIGHT",#options>visible and -18 or -4,-4-(i-1)*rowHeight)
-                local selected=option.value==page[menu.filter]
+                local selected=option.value==page.crafter
                 row.label:SetText(option.label)
                 if selected then row.label:SetTextColor(0.47,0.84,0.68) else row.label:SetTextColor(0.94,0.89,0.78) end
             end
@@ -62,22 +62,19 @@ local function CraftFilterMenu(page, H, onChoose)
         bar.Refresh(#options,visible,offset)
     end
 
-    function menu.Open(anchor,filter)
+    function menu.Open(anchor)
         page.search:ClearFocus()
-        menu.filter, offset, activeChoices=filter,0,nil
+        offset, activeChoices=0,nil
         menu:ClearAllPoints()
         menu:SetPoint("TOPLEFT",anchor,"BOTTOMLEFT",0,-3)
         menu:SetPoint("TOPRIGHT",anchor,"BOTTOMRIGHT",0,-3)
         shield:Show()
     end
 
-    function menu.Update(choices)
-        if not shield:IsShown() then return end
-        local available=choices[menu.filter]
-        if available==activeChoices then return end
+    function menu.Update(available)
+        if not shield:IsShown() or available==activeChoices then return end
         activeChoices=available
-        options={{label=menu.filter=="profession" and "All professions" or "All crafters"}}
-        if menu.filter=="crafter" then options[2]={value=true,label="Craftable by guild"} end
+        options={{label="All crafters"},{value=true,label="Craftable by guild"}}
         for _,option in ipairs(available) do options[#options+1]=option end
         Render()
     end
@@ -129,27 +126,56 @@ function TC.BuildGuildPages(window,H)
         crafts.Update()
     end
     crafts.search:SetScript("OnTextChanged",ResetCraftsList)
-    local menu=CraftFilterMenu(crafts,H,function(filter,value)
-        crafts[filter]=value
+    local menu=CrafterMenu(crafts,H,function(value)
+        crafts.crafter=value
         ResetCraftsList()
     end)
-    local function FilterButton(filter,title)
-        local button=Button(crafts,"",function(self)
-            menu.Open(self,filter)
-            menu.Update(TC.RecipeFilterOptions())
-        end)
-        button.label=Label(crafts,title,0,0)
-        button.caption=Label(button,"",0,0)
-        button.caption:SetPoint("TOPLEFT",button,"TOPLEFT",8,-6)
-        button.caption:SetPoint("TOPRIGHT",button,"TOPRIGHT",-24,-6)
-        local arrow=button:CreateTexture(nil,"ARTWORK")
-        arrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
-        arrow:SetSize(18,18)
-        arrow:SetPoint("RIGHT",button,"RIGHT",-3,0)
-        return button
+    local crafter=Button(crafts,"",function(self)
+        menu.Open(self)
+        menu.Update(TC.RecipeFilterOptions().crafter)
+    end)
+    crafter.label=Label(crafts,"Crafter",0,0)
+    crafter.caption=Label(crafter,"",0,0)
+    crafter.caption:SetPoint("TOPLEFT",crafter,"TOPLEFT",8,-6)
+    crafter.caption:SetPoint("TOPRIGHT",crafter,"TOPRIGHT",-24,-6)
+    local arrow=crafter:CreateTexture(nil,"ARTWORK")
+    arrow:SetTexture("Interface\\Buttons\\UI-ScrollBar-ScrollDownButton-Up")
+    arrow:SetSize(18,18)
+    arrow:SetPoint("RIGHT",crafter,"RIGHT",-3,0)
+    crafts.crafterButton=crafter
+
+    crafts.professionChecks={}
+    local professionOptions
+    local function UpdateProfessionChecks(options)
+        if options==professionOptions then return end
+        local previousCount=professionOptions and #professionOptions or 0
+        professionOptions=options
+        local selection={}
+        for i,option in ipairs(options) do
+            local check=crafts.professionChecks[i]
+            if not check then
+                check=CreateFrame("CheckButton",nil,crafts,"UICheckButtonTemplate")
+                check.label=Label(check,"",0,0)
+                check:SetScript("OnClick",function(self)
+                    -- The row cache uses the selection table as a key.
+                    local selection={}
+                    for id in pairs(crafts.professions or {}) do selection[id]=true end
+                    selection[self.professionID]=self:GetChecked() and true or nil
+                    crafts.professions=next(selection) and selection or nil
+                    ResetCraftsList()
+                end)
+                crafts.professionChecks[i]=check
+            end
+            check.professionID=option.value
+            check.label:SetText(option.label)
+            selection[option.value]=crafts.professions and crafts.professions[option.value] or nil
+            check:SetChecked(selection[option.value] or false)
+            check:Show()
+        end
+        crafts.professions=next(selection) and selection or nil
+        for i=#options+1,#crafts.professionChecks do crafts.professionChecks[i]:Hide() end
+        if #options~=previousCount then crafts.Layout() end
     end
-    crafts.professionButton=FilterButton("profession","Profession")
-    crafts.crafterButton=FilterButton("crafter","Crafter")
     local function FilterLabel(options,value,default)
         for _,option in ipairs(options) do if option.value==value then return option.label end end
         return default
@@ -171,17 +197,16 @@ function TC.BuildGuildPages(window,H)
         if window.activePage~="crafts" then return end
         if crafts.store~=TC.store then
             crafts.store=TC.store
-            crafts.profession,crafts.crafter,crafts.offset,crafts.selected=nil,nil,0,nil
+            crafts.professions,crafts.crafter,crafts.offset,crafts.selected=nil,nil,0,nil
         end
         local choices=TC.RecipeFilterOptions()
-        crafts.professionButton.caption:SetText(FilterLabel(choices.profession,crafts.profession,
-            crafts.profession and ("Profession #"..crafts.profession) or "All professions"))
+        UpdateProfessionChecks(choices.profession)
         local owner=type(crafts.crafter)=="string" and crafts.crafter or nil
         crafts.crafterButton.caption:SetText(FilterLabel(choices.crafter,owner,
             owner and TC.DisplayName(owner) or (crafts.crafter and "Craftable by guild" or "All crafters")))
-        menu.Update(choices)
+        menu.Update(choices.crafter)
         local query=crafts.search:GetText()
-        local data=TC.RecipeRows(query,crafts.crafter==true,crafts.profession,owner)
+        local data=TC.RecipeRows(query,crafts.crafter==true,crafts.professions,owner)
         Fill(crafts,data,function(row,entry)
             row.icon:SetTexture(entry.icon); row.a:SetText(entry.name); row.b:SetText(entry.profession)
             local availability=not entry.craftable and TC.RecipeAvailabilityFor(entry) or nil
@@ -192,29 +217,39 @@ function TC.BuildGuildPages(window,H)
         end)
         crafts.count:SetText(#data.." recipes")
         if #data==0 then
-            crafts.details:SetText((query~="" or crafts.profession or crafts.crafter) and
+            crafts.details:SetText((query~="" or crafts.professions or crafts.crafter) and
                 "No matching recipes." or "Open your profession and click Scan professions.")
         elseif not crafts.selected then crafts.details:SetText("") end
     end
     crafts.Layout=function()
         local w,h=window:GetWidth(),window:GetHeight(); local content=w-48
         Place(crafts.scan,w-290,-28,130,26)
-        local searchW,professionFilterW=math.floor(content*0.42),math.floor(content*0.25)
+        local searchW=math.floor(content*0.64)
         PlaceEdit(crafts.search,24,-106,searchW)
-        local professionX=24+searchW+12
-        local crafterX=professionX+professionFilterW+12
-        PlaceEdit(crafts.professionButton,professionX,-106,professionFilterW)
-        PlaceEdit(crafts.crafterButton,crafterX,-106,content-searchW-professionFilterW-24)
+        PlaceEdit(crafts.crafterButton,24+searchW+12,-106,content-searchW-12)
+        local columns=math.max(1,math.floor(content/140))
+        local cellWidth=content/columns
+        local optionCount=professionOptions and #professionOptions or 0
+        for i=1,optionCount do
+            local check=crafts.professionChecks[i]
+            local column=(i-1)%columns
+            local row=math.floor((i-1)/columns)
+            Place(check,24+column*cellWidth,-156-row*22,22,22)
+            Place(check.label,24,-5,cellWidth-30)
+            check:SetHitRectInsets(0,22-cellWidth,0,0)
+        end
+        local gridHeight=optionCount>0 and math.ceil(optionCount/columns)*22+6 or 0
+        local rowTop=182+gridHeight
         local recipeW,professionW=math.floor(content*0.42),math.floor(content*0.23)
         -- Reserve the bar's gutter even when it is hidden, so rows keep their
         -- width instead of reflowing as the result count crosses the page size.
         local rowW=content-18
-        Place(crafts.headers[1],54,-160,recipeW-36); Place(crafts.headers[2],24+recipeW,-160,professionW-10)
-        Place(crafts.headers[3],24+recipeW+professionW,-160,rowW-recipeW-professionW)
-        crafts.visible=math.max(1,math.floor((h-225-182)/30))
+        Place(crafts.headers[1],54,-160-gridHeight,recipeW-36); Place(crafts.headers[2],24+recipeW,-160-gridHeight,professionW-10)
+        Place(crafts.headers[3],24+recipeW+professionW,-160-gridHeight,rowW-recipeW-professionW)
+        crafts.visible=math.max(1,math.floor((h-225-rowTop)/30))
         for i=1,crafts.visible do
             if not crafts.rows[i] then crafts.rows[i]=Row(crafts,i) end
-            local row=crafts.rows[i]; Place(row,24,-182-(i-1)*30,rowW,30)
+            local row=crafts.rows[i]; Place(row,24,-rowTop-(i-1)*30,rowW,30)
             Place(row.icon,0,-4,22,22); Place(row.a,30,-9,recipeW-38)
             Place(row.b,recipeW,-9,professionW-10); Place(row.c,recipeW+professionW,-9,rowW-recipeW-professionW)
             row:SetScript("OnEnter",function(self)
@@ -226,7 +261,7 @@ function TC.BuildGuildPages(window,H)
                 end
             end)
         end
-        Place(crafts.scrollBar,24+rowW+6,-182,12,crafts.visible*30-4)
+        Place(crafts.scrollBar,24+rowW+6,-rowTop,12,crafts.visible*30-4)
         Place(crafts.count,24,-h+213,content)
         Place(crafts.details,24,-h+186,content,148)
         crafts.details:SetFontObject("GameFontHighlightSmall")

@@ -1,4 +1,8 @@
-# The Commune — 0.4.30
+# The Commune — 0.4.31
+
+## Profession checkboxes and login patch notes (0.4.31)
+
+Crafts shows profession checkboxes below the search bar. Check any combination, or clear every box to show all professions. The Crafter dropdown still filters to a guildmate or to recipes craftable by the guild. The login summary now includes a short note about the latest visible change.
 
 ## Craft filters (0.4.30)
 

@@ -392,21 +392,22 @@ function TC.RecipeAvailabilityFor(entry)
     return entry.availability
 end
 
-function TC.RecipeRows(query, onlyCraftable, profession, crafter)
+function TC.RecipeRows(query, onlyCraftable, professions, crafter)
     query = (query or ""):match("^%s*(.-)%s*$"):lower()
     onlyCraftable = onlyCraftable and true or false
+    professions = professions and next(professions) and professions or nil
     if rowCache and rowCache.query == query and rowCache.only == onlyCraftable and
-        rowCache.profession == profession and rowCache.crafter == crafter then return rowCache.result end
+        rowCache.professions == professions and rowCache.crafter == crafter then return rowCache.result end
     local result = {}
     -- Entries are already in display order, so the filter keeps it.
     for _, entry in ipairs(BuildEntries()) do
-        if (not profession or entry.meta.profession == profession) and
+        if (not professions or professions[entry.meta.profession]) and
             (not onlyCraftable or entry.craftable) and (not crafter or (entry.knownBy and entry.knownBy[crafter])) and
             TC.RecipeMatches(query, entry.text, entry.name, entry.id) then
             result[#result + 1] = entry
         end
     end
-    rowCache = {query=query, only=onlyCraftable, profession=profession, crafter=crafter, result=result}
+    rowCache = {query=query, only=onlyCraftable, professions=professions, crafter=crafter, result=result}
     return result
 end
 

@@ -1,5 +1,9 @@
 local _, TC = ...
 local bubble, state, currentStore
+local latestUpdate = {
+    version = "0.4.31",
+    text = "Pick multiple professions in Crafts using checkboxes."
+}
 local function NumberOf(t)
     local count=0; for _ in pairs(t) do count=count+1 end; return count
 end
@@ -14,6 +18,17 @@ local function StateForStore()
     end
     currentStore,state=TC.store,saved
     return first
+end
+
+local function LayoutPatchNote(newsLines)
+    if bubble.newsLines == newsLines then return end
+    bubble.newsLines = newsLines
+    local noteTop = newsLines == 0 and 98 or (newsLines == 1 and 121 or 135)
+    bubble.news:SetHeight(newsLines > 1 and 30 or 16)
+    bubble.patchTitle:ClearAllPoints()
+    bubble.patchTitle:SetPoint("TOPLEFT",14,-noteTop)
+    local textHeight = bubble.patchText:GetStringHeight()
+    bubble:SetHeight(noteTop + 16 + (textHeight and textHeight > 0 and math.ceil(textHeight) or 28) + 10)
 end
 
 function TC.UpdateSummary()
@@ -57,8 +72,7 @@ function TC.UpdateSummary()
         if np>0 then parts[#parts+1]=np.." new project"..(np==1 and "" or "s") end
         bubble.news:SetText(table.concat(parts,"\n"))
         bubble.news:SetShown(#parts>0)
-        local textHeight=#parts>1 and 30 or 16
-        bubble.news:SetHeight(textHeight); bubble:SetSize(264,#parts>0 and 106+textHeight or 98)
+        LayoutPatchNote(#parts)
         TC.UpdateSummaryDaily()
         if newArrival then bubble:Show() end
     end
@@ -119,6 +133,15 @@ local function Build()
     bubble.news=bubble:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
     bubble.news:SetPoint("TOPLEFT",14,-98); bubble.news:SetWidth(236); bubble.news:SetHeight(16)
     bubble.news:SetJustifyH("LEFT"); bubble.news:SetJustifyV("TOP"); bubble.news:SetWordWrap(true)
+
+    bubble.patchTitle=bubble:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    bubble.patchTitle:SetText("Latest update  |  "..latestUpdate.version)
+    bubble.patchTitle:SetTextColor(0.82,0.77,0.66)
+    bubble.patchText=bubble:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall")
+    bubble.patchText:SetPoint("TOPLEFT",bubble.patchTitle,"TOPLEFT",0,-16)
+    bubble.patchText:SetWidth(236)
+    bubble.patchText:SetJustifyH("LEFT"); bubble.patchText:SetWordWrap(true)
+    bubble.patchText:SetText(latestUpdate.text)
 end
 
 function TC.ShowSummary()
