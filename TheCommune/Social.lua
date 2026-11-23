@@ -48,24 +48,69 @@ function TC.DailyState()
     f.days[day]=f.days[day] or {answers={},guesses={}}
     return f.days[day],day
 end
+local function QuizCount(day, state)
+    -- Someone upgrading after answering on an older version can finish that
+    -- day's original quiz with their saved answers and completion intact.
+    if day<TC.MixedQuizStartDay or (state and not state.mixedQuiz and next(state.answers)) then return 4 end
+    return 5
+end
+
+function TC.DailyQuizCount()
+    local day=TC.DayID()
+    return QuizCount(day, TC.db and TC.db.fun and TC.db.fun.days[day])
+end
+
+local function ShuffledCopy(entries, seed)
+    local result={}
+    for i,entry in ipairs(entries) do result[i]=entry end
+    seed=seed%2147483647
+    for i=#result,2,-1 do
+        seed=(seed*48271)%2147483647
+        local j=seed%i+1
+        result[i],result[j]=result[j],result[i]
+    end
+    return result
+end
+
+local wowDeck, gamesDeck, generalDeck
+local function MixedQuiz(day)
+    -- Walk shuffled decks so a category covers its whole pool before repeating.
+    -- Use the same deterministic order for every guildmate, regardless of relogs.
+    if not wowDeck then
+        wowDeck=ShuffledCopy(TC.QuizBank,773)
+        gamesDeck=ShuffledCopy(TC.QuizOtherGames,2137)
+        generalDeck=ShuffledCopy(TC.QuizGeneral,3527)
+    end
+    local offset=day-TC.MixedQuizStartDay
+    local questions={}
+    for i=1,3 do questions[i]=wowDeck[(offset*3+i-1)%#wowDeck+1] end
+    questions[4]=gamesDeck[offset%#gamesDeck+1]
+    questions[5]=generalDeck[offset%#generalDeck+1]
+    return ShuffledCopy(questions, day*104729)
+end
+
 function TC.DailyQuiz()
-    local _,day=TC.DailyState(); local result={}
-    local rolloutQuestions=day==TC.QuizRolloutDay and TC.QuizRolloutQuestions
-    for slot=1,4 do
+    local state,day=TC.DailyState()
+    local count=QuizCount(day,state)
+    local questions=count==5 and MixedQuiz(day)
+    local rollout=day==TC.QuizRolloutDay and TC.QuizRolloutQuestions
+    local result={}
+    for slot=1,count do
         local index=(day*4+slot-1)%#TC.QuizBank+1
-        local q=(rolloutQuestions and rolloutQuestions[index]) or TC.QuizBank[index]
-        local options={}
-        for i,value in ipairs(q.choices) do options[i]=value end
-        local seed=(day*7919+q.id*104729)%2147483647
-        for i=4,2,-1 do seed=(seed*48271)%2147483647; local j=seed%i+1; options[i],options[j]=options[j],options[i] end
+        local q=questions and questions[slot] or (rollout and rollout[index]) or TC.QuizBank[index]
+        local options=ShuffledCopy(q.choices, day*7919+q.id*104729)
         result[slot]={id=q.id,question=q.question,options=options,answer=q.answer,explanation=q.explanation,source=q.source,difficulty=q.difficulty}
     end
     return result
 end
+
 function TC.DailyProgress()
-    if not TC.db or not TC.db.fun then return 0,false end
-    local d=TC.DailyState(); local n=0; for i=1,4 do if d.answers[i] then n=n+1 end end
-    return n,d.wordleResult~=nil
+    if not TC.db or not TC.db.fun then return 0,false,TC.DailyQuizCount() end
+    local d,day=TC.DailyState()
+    local count=QuizCount(day,d)
+    local n=0
+    for i=1,count do if d.answers[i] then n=n+1 end end
+    return n,d.wordleResult~=nil,count
 end
 function TC.CreditBalance(account)
     account=account or TC.db.fun.account
@@ -85,10 +130,10 @@ function TC.PublishSocial(send)
     -- label as it reads now instead of the one cached when the guild loaded.
     f.display=TC.Clean(TC.DisplayName(TC.owner),32)
     local d,day=TC.DailyState(); local answered,correct=0,0
-    for i=1,4 do if d.answers[i] then answered=answered+1; if d.answers[i].correct then correct=correct+1 end end end
+    for i=1,QuizCount(day,d) do if d.answers[i] then answered=answered+1; if d.answers[i].correct then correct=correct+1 end end end
     local s=f.stats
     local p={revision=w.revision,name=f.display,qa=s.qa,qc=s.qc,qd=s.qd,wp=s.wp,ww=s.ww,wg=s.wg,day=day,answered=answered,correct=correct,
-        result=d.wordleResult or 0,earned=w.earned,spent=w.spent,title=f.title or "",transfers=w.transfers,grants=w.grants,deductions=w.deductions}
+        fifthAnswered=d.answers[5]~=nil,fifthCorrect=d.answers[5] and d.answers[5].correct,result=d.wordleResult or 0,earned=w.earned,spent=w.spent,title=f.title or "",transfers=w.transfers,grants=w.grants,deductions=w.deductions}
     TC.store.social.accounts[f.account]=p; TC.store.social.characters[TC.owner]=f.account
     if send and TC.guildKey and TC.QueueGuildPacket then TC.BroadcastSocial() end
 end
@@ -98,13 +143,16 @@ local function Changed()
     if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
 end
 function TC.AnswerQuiz(slot,choice)
-    if not TC.Integer(slot,1,4) or not TC.Integer(choice,1,4) then return nil,"Choose an answer." end
-    local d=TC.DailyState(); if d.answers[slot] then return nil,"That question is already answered today." end
+    local d,day=TC.DailyState()
+    local count=QuizCount(day,d)
+    if not TC.Integer(slot,1,count) or not TC.Integer(choice,1,4) then return nil,"Choose an answer." end
+    if d.answers[slot] then return nil,"That question is already answered today." end
     local q=TC.DailyQuiz()[slot]; local correct=q.options[choice]==q.answer
+    if count==5 then d.mixedQuiz=true end
     d.answers[slot]={choice=choice,correct=correct,id=q.id}
     local s=TC.db.fun.stats; s.qa=s.qa+1
     if correct then s.qc=s.qc+1; TC.wallet.earned=TC.wallet.earned+1; Log("+1 Social Credit: daily quiz") end
-    local n=TC.DailyProgress(); if n==4 then s.qd=s.qd+1 end
+    local n=TC.DailyProgress(); if n==count then s.qd=s.qd+1 end
     Changed(); return true,correct
 end
 function TC.WordAnswer(day) return TC.WordSolutions[((day or TC.DayID())*37)%#TC.WordSolutions+1] end
@@ -180,7 +228,11 @@ function TC.BroadcastSocial()
     TC.BroadcastWordBoard()
     if not TC.store or not TC.store.social then return end
     local f,w=TC.db.fun,TC.wallet; local p=TC.store.social.accounts[f.account]
-    TC.QueueGuildPacket("social-head",table.concat({"FA",f.account,p.revision,p.name,p.qa,p.qc,p.qd,p.wp,p.ww,p.wg,p.day,p.answered,p.correct,p.result,p.earned,p.spent,p.title},"\t"))
+    -- Older clients reject the whole profile if the daily field exceeds four.
+    -- Lifetime scores and earned credits include the fifth question.
+    local answered=math.min(p.answered-(p.fifthAnswered and 1 or 0),4)
+    local correct=p.correct-(p.fifthCorrect and 1 or 0)
+    TC.QueueGuildPacket("social-head",table.concat({"FA",f.account,p.revision,p.name,p.qa,p.qc,p.qd,p.wp,p.ww,p.wg,p.day,answered,correct,p.result,p.earned,p.spent,p.title},"\t"))
     for to,amount in pairs(w.transfers) do TC.QueueGuildPacket("social-transfer:"..to,table.concat({"FB",f.account,to,p.revision,amount},"\t")) end
     if TC.IsGuildMaster(TC.owner)==true then
         for to,amount in pairs(w.deductions) do TC.QueueGuildPacket("social-deduction:"..to,table.concat({"FD",f.account,to,p.revision,amount},"\t")) end

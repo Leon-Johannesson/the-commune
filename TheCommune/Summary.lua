@@ -1,8 +1,8 @@
 local _, TC = ...
 local bubble, state, currentStore
 local latestUpdate = {
-    version = "0.4.33",
-    text = "The daily quiz has new raid, expansion, and Warcraft trivia."
+    version = "0.4.34",
+    text = "Five daily questions from WoW, other games, and general trivia."
 }
 local function NumberOf(t)
     local count=0; for _ in pairs(t) do count=count+1 end; return count
@@ -80,8 +80,8 @@ end
 
 function TC.UpdateSummaryDaily()
     if not bubble or not TC.guildKey then return end
-    local answered,done=TC.DailyProgress()
-    bubble.quiz:SetText("Quiz: "..answered.."/4")
+    local answered,done,count=TC.DailyProgress()
+    bubble.quiz:SetText("Quiz: "..answered.."/"..count)
     bubble.wordle:SetText("Wordle: "..(done and "Done" or "To do"))
 end
 

@@ -58,8 +58,8 @@ local function Build()
         q.buttons[i]:SetHeight(34)
     end
     q.message=Label(q,"",24,-412,700,104)
-    q.previous=Button(q,"Previous",24,-550,120,function() q.slot=q.slot==1 and 4 or q.slot-1; TC.RefreshSocialWindow() end)
-    q.next=Button(q,"Next",158,-550,120,function() q.slot=q.slot==4 and 1 or q.slot+1; TC.RefreshSocialWindow() end)
+    q.previous=Button(q,"Previous",24,-550,120,function() q.slot=q.slot==1 and TC.DailyQuizCount() or q.slot-1; TC.RefreshSocialWindow() end)
+    q.next=Button(q,"Next",158,-550,120,function() q.slot=q.slot>=TC.DailyQuizCount() and 1 or q.slot+1; TC.RefreshSocialWindow() end)
 
 
     local w=pages.wordle
@@ -196,8 +196,10 @@ function TC.RefreshSocialWindow()
     local d=TC.DailyState(); local _,finished=TC.DailyProgress()
     window.balance:SetText(TC.db.fun.display.."  |  "..TC.CreditBalance().." Social Credits")
     if current=="quiz" then
-        local p=pages.quiz; local question=TC.DailyQuiz()[p.slot]; local a=d.answers[p.slot]
-        p.header:SetText("Question "..p.slot.."/4")
+        local p=pages.quiz; local questions=TC.DailyQuiz()
+        p.slot=math.min(p.slot,#questions)
+        local question,a=questions[p.slot],d.answers[p.slot]
+        p.header:SetText("Question "..p.slot.."/"..#questions)
         p.question:SetText(question.question)
         for i,b in ipairs(p.buttons) do b:SetText(question.options[i]); b:SetEnabled(a==nil) end
         p.message:SetText(a and ((a.correct and "Correct! +1 Social Credit.\n" or "Not quite.\n").."Answer: "..question.answer.."\n"..question.explanation) or "")
@@ -296,8 +298,8 @@ function TC.OpenSocial(page)
 end
 function TC.UpdateFlightPanel()
     if not flight then return end
-    local answered,wordle=TC.DailyProgress()
-    flight.reminder:SetText((answered<4 and ("Quiz: "..(4-answered).." questions left") or "Quiz complete").."  |  "..(wordle and "Wordle complete" or "Wordle to do"))
+    local answered,wordle,count=TC.DailyProgress()
+    flight.reminder:SetText((answered<count and ("Quiz: "..(count-answered).." questions left") or "Quiz complete").."  |  "..(wordle and "Wordle complete" or "Wordle to do"))
     flight.scores:SetText(ScoreText(6))
     local measured=flight.scores:GetStringHeight()
     local height=type(measured)=="number" and measured>0 and measured or math.min(6,math.max(1,#TC.ScoreRows()))*14

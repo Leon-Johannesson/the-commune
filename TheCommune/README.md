@@ -1,4 +1,8 @@
-# The Commune — 0.4.33
+# The Commune — 0.4.34
+
+## A mixed five-question daily quiz (0.4.34)
+
+Starting November 24 at 00:00 UTC, each daily quiz shuffles three Warcraft questions, one other gaming question, and one general trivia question. There are 28 new questions across the two new categories. The previous quiz and any answers already submitted carry through.
 
 ## Sharper daily quiz questions (0.4.33)
 
