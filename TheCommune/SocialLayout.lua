@@ -54,7 +54,7 @@ function TC.LayoutSocialPages(window,main,pages)
     Place(s.body,left,84,content,height-150); s.body:SetJustifyH("CENTER")
     Place(s.sync,width/2-70,height-48,140,28)
     local v=pages.pvp
-    Place(v.mode,width/2-90,80,180,28)
+    for i,button in ipairs(v.sortButtons) do Place(button,width/2-176+(i-1)*120,80,112,28) end
     v.visible=math.min(7,math.max(1,math.floor((height-248)/32)))
     for i,b in ipairs(v.rows) do Place(b,left,122+(i-1)*32,content,28) end
     Place(v.detail,left,height-112,content,68); Place(v.tracking,left,height-40,content,32)

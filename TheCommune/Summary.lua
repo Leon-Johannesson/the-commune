@@ -1,8 +1,8 @@
 local _, TC = ...
 local bubble, state, currentStore
 local latestUpdate = {
-    version = "0.4.31",
-    text = "Pick multiple professions in Crafts using checkboxes."
+    version = "0.4.32",
+    text = "PvP Stats now ranks Hero and Shame killing blows."
 }
 local function NumberOf(t)
     local count=0; for _ in pairs(t) do count=count+1 end; return count

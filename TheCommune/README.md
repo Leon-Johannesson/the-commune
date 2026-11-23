@@ -1,4 +1,8 @@
-# The Commune — 0.4.31
+# The Commune — 0.4.32
+
+## Hero and Shame PvP stats (0.4.32)
+
+PvP Stats tracks confirmed killing blows when the client exposes the attacker, victim, and their levels. Hero counts kills against players at least three levels higher, and Shame counts kills against players at least five levels lower. Use the new buttons to sort the guild by either stat. Previously recorded level gaps count too. Skinning recipes remain searchable through Crafts.
 
 ## Profession checkboxes and login patch notes (0.4.31)
 

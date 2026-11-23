@@ -168,8 +168,14 @@ local function Build()
     s.body:SetFontObject("GameFontHighlight")
     s.sync=Button(s,"Sync guild",24,-554,140,function() TC.Query(true) end)
 
-    local v=pages.pvp; v.offset=0; v.shame=false
-    v.mode=Button(v,"Show shame list",24,-180,180,function() v.shame=not v.shame; v.offset=0; TC.RefreshSocialWindow() end)
+    local v=pages.pvp; v.offset=0; v.mode="kills"
+    v.sortButtons={}
+    for i,entry in ipairs({{"kills","Honorable kills"},{"hero","Hero"},{"shame","Shame"}}) do
+        local button=Button(v,entry[2],0,0,112,function(self)
+            v.mode=self.mode; v.offset=0; TC.RefreshSocialWindow()
+        end)
+        button.mode=entry[1]; v.sortButtons[i]=button
+    end
     v.rows={}
     for i=1,7 do
         v.rows[i]=Button(v,"",24,-222-(i-1)*32,720,function(self) v.selected=self.owner; TC.RefreshSocialWindow() end)
@@ -253,25 +259,28 @@ function TC.RefreshSocialWindow()
     elseif current=="aim" then TC.RefreshAim(pages.aim)
     elseif current=="scores" then pages.scores.body:SetText(ScoreText(20))
     elseif current=="pvp" then
-        local p=pages.pvp; local rows=TC.PvPRows(p.shame); p.offset=math.min(p.offset,math.max(0,#rows-(p.visible or 7)))
-        local labels={}; for _,r in ipairs(rows) do labels[r.owner]=r.label end
+        local p=pages.pvp; local rows=TC.PvPRows(p.mode); p.offset=math.min(p.offset,math.max(0,#rows-(p.visible or 7)))
+        local selected
+        for _,r in ipairs(rows) do if r.owner==p.selected then selected=r; break end end
         p.tracking:SetText(TC.PvPStatus())
-        p.mode:SetText(p.shame and "Show most kills" or "Show shame list")
+        for _,button in ipairs(p.sortButtons) do button:SetEnabled(button.mode~=p.mode) end
         for i,b in ipairs(p.rows) do
             local r=i<=(p.visible or 7) and rows[p.offset+i]; b.owner=r and r.owner
             if r then
                 local s=r.stats
-                b:SetText(r.label.." | Honorable kills: "..(s.honorKills~=nil and s.honorKills or "?").." | Deaths: "..(s.deaths~=nil and (s.deaths..(s.deathsLifetime and "" or "*")) or "?").." | Observed: "..s.total.." | ±2: "..s.fair.." | 10+ below: "..s.below10)
+                b:SetText(r.label.." | Honorable kills: "..(s.honorKills~=nil and s.honorKills or "?").." | Deaths: "..(s.deaths~=nil and (s.deaths..(s.deathsLifetime and "" or "*")) or "?").." | Hero: "..r.hero.." | Shame: "..r.shame.." | ±2: "..s.fair)
                 b:Show()
             else b:Hide() end
         end
-        local selected=p.selected and TC.store.social.pvp[p.selected]
         if selected then
-            local gaps={}; for diff,count in pairs(selected.diffs) do gaps[#gaps+1]={diff=diff,count=count} end
+            local stats=selected.stats
+            local gaps={}; for diff,count in pairs(stats.diffs) do gaps[#gaps+1]={diff=diff,count=count} end
             table.sort(gaps,function(a,b) return a.diff<b.diff end)
             local parts={}; for _,g in ipairs(gaps) do parts[#parts+1]=(g.diff>0 and "+" or "")..g.diff..": "..g.count end
-            p.detail:SetText((labels[p.selected] or TC.DisplayName(p.selected)).." - victim level minus killer level (negative = lower)\n"..table.concat(parts," | ").."\nUnknown level: "..selected.unknown.." | Deaths: "..(selected.deaths or "?")..(selected.deathsLifetime and " (lifetime, all causes)" or " (tracked since addon, all causes)"))
-        else p.detail:SetText("Select a player for the level-gap breakdown. Shame list ranks kills against players 10+ levels lower.") end
+            p.detail:SetText(selected.label.." | Recorded killing blows: "..stats.total.." | Unknown level: "..stats.unknown..
+                "\nLevel gaps: "..(#parts>0 and table.concat(parts," | ") or "None recorded")..
+                "\nDeaths: "..(stats.deaths or "?")..(stats.deathsLifetime and " (lifetime, all causes)" or " (tracked since addon, all causes)"))
+        else p.detail:SetText("Hero: 3+ levels above you   |   Shame: 5+ levels below you") end
     end
 end
 function TC.OpenSocial(page)

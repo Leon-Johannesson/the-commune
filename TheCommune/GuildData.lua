@@ -366,7 +366,8 @@ local function BuildEntries()
         if a.name == b.name then return a.id < b.id end return a.name < b.name end)
     local professions, owners = {}, {}
     for id, name in pairs(professionNames) do
-        professions[#professions + 1] = {value=id, label=name, order=name:lower()}
+        -- Skinning is primarily gathering. Its entries remain searchable in Crafts.
+        if id~=393 then professions[#professions + 1] = {value=id, label=name, order=name:lower()} end
     end
     for owner, name in pairs(crafterNames) do
         local label = nameCounts[name] > 1 and (name .. " (" .. owner .. ")") or name
