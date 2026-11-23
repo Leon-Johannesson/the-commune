@@ -1,4 +1,8 @@
-# The Commune — 0.4.32
+# The Commune — 0.4.33
+
+## Sharper daily quiz questions (0.4.33)
+
+Replaced basic class and faction questions with expansion launches, raid openings, secrets, and Warcraft oddities. The quiz still has four questions per day. The November 23 UTC quiz keeps its original questions so answers already submitted that day still line up.
 
 ## Hero and Shame PvP stats (0.4.32)
 

@@ -1,8 +1,8 @@
 local _, TC = ...
 local bubble, state, currentStore
 local latestUpdate = {
-    version = "0.4.32",
-    text = "PvP Stats now ranks Hero and Shame killing blows."
+    version = "0.4.33",
+    text = "The daily quiz has new raid, expansion, and Warcraft trivia."
 }
 local function NumberOf(t)
     local count=0; for _ in pairs(t) do count=count+1 end; return count

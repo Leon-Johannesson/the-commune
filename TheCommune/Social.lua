@@ -50,9 +50,11 @@ function TC.DailyState()
 end
 function TC.DailyQuiz()
     local _,day=TC.DailyState(); local result={}
+    local rolloutQuestions=day==TC.QuizRolloutDay and TC.QuizRolloutQuestions
     for slot=1,4 do
         local index=(day*4+slot-1)%#TC.QuizBank+1
-        local q=TC.QuizBank[index]; local options={}
+        local q=(rolloutQuestions and rolloutQuestions[index]) or TC.QuizBank[index]
+        local options={}
         for i,value in ipairs(q.choices) do options[i]=value end
         local seed=(day*7919+q.id*104729)%2147483647
         for i=4,2,-1 do seed=(seed*48271)%2147483647; local j=seed%i+1; options[i],options[j]=options[j],options[i] end
