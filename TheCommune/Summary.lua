@@ -1,8 +1,8 @@
 local _, TC = ...
 local bubble, state, currentStore
 local latestUpdate = {
-    version = "0.4.36",
-    text = "Guildmates now share saved player information even while its owner is offline."
+    version = "0.4.37",
+    text = "Deaths shows guildmates' counts in your current zone, with a small movable zone panel."
 }
 local function NumberOf(t)
     local count=0; for _ in pairs(t) do count=count+1 end; return count

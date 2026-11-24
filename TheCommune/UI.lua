@@ -202,6 +202,13 @@ Layout = function()
     if not window.ready then return end
     local width, height = window:GetWidth(), window:GetHeight()
     local content = width - 48
+    if window.pageTabs then
+        local tabWidth = math.min(112, math.floor((content - 6 * 8) / 7))
+        for i, key in ipairs({"requests", "crafts", "projects", "hitlist", "armory", "deaths"}) do
+            Place(window.pageTabs[key], 24 + (i - 1) * (tabWidth + 8), -70, tabWidth, 26)
+        end
+        Place(window.funButton, 24 + 6 * (tabWidth + 8), -70, tabWidth, 26)
+    end
     if window.noGuildText then window.noGuildText:SetWidth(width-96) end
     local column = (content - 24) / 2
     local numberWidth = (column - 24) / 2
@@ -359,6 +366,7 @@ local function Build()
     TC.BuildGuildPages(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
     TC.BuildHitlistPage(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
     TC.BuildArmoryPage(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
+    TC.BuildDeathsPage(window,{Place=Place,Label=Label,Button=Button,Edit=Edit,PlaceEdit=PlaceEdit})
     window.pageTabs={}
     TC.ShowPage=function(name)
         if name~="requests" and not window.guildPages[name] then return end
@@ -373,7 +381,7 @@ local function Build()
         if TC.guildKey and changed and name=="hitlist" then TC.Query(false, true); TC.BroadcastHitCache() end
         if TC.guildKey and changed and name=="armory" then TC.Query(false, true); TC.BroadcastGear(true) end
     end
-    for i,entry in ipairs({{"requests","Requests"},{"crafts","Crafts"},{"projects","Projects"},{"hitlist","Hitlist"},{"armory","Armory"}}) do
+    for i,entry in ipairs({{"requests","Requests"},{"crafts","Crafts"},{"projects","Projects"},{"hitlist","Hitlist"},{"armory","Armory"},{"deaths","Deaths"}}) do
         local key=entry[1]
         local tab=Button(window,entry[2],function() TC.ShowPage(key) end)
         Place(tab,24+(i-1)*120,-70,112,26); window.pageTabs[key]=tab
@@ -488,7 +496,7 @@ SlashCmdList.THECOMMUNE = function(command)
     if command == "debug" then TC.DebugSync(); return end
     if command == "craftsdebug" then TC.ScanProfessions(); TC.DebugCrafts(); return end
     if command == "summary" then TC.ShowSummary(); return end
-    if command=="crafts" or command=="projects" or command=="requests" then
+    if command=="crafts" or command=="projects" or command=="requests" or command=="deaths" then
         if not window then Build() end
         window:Show(); TC.ShowPage(command); return
     end

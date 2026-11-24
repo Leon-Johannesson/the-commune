@@ -1,4 +1,10 @@
-# The Commune â€” 0.4.35
+# The Commune — 0.4.37
+
+## Guild deaths in your current zone (0.4.37)
+
+The new Deaths tab in the main window, also opened with `/commune deaths`, lists guild characters with shared deaths in the zone or instance you are currently in. It follows your location automatically and shows each character's count, highest first. These are deaths from all causes recorded since 0.4.35, rather than historical lifetime zone totals. Offline characters appear when their records have been shared; missing records do not mean zero deaths.
+
+A small movable panel shows the same current-zone counts while playing. It stays hidden where there are no shared deaths, shows up to five characters at once, and scrolls for the rest. The X dismisses it until you change zones. Uncheck Show zone panel while playing on the Deaths page to disable it, or re-enable it there. Its position and the panel preference survive reloads. Zone changes and new guild data update both views without opening the main window or playing a sound.
 
 ## Offline player information sharing (0.4.36)
 

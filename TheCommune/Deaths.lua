@@ -48,6 +48,34 @@ local function DeathZone()
     if name~="" then return "name:"..name,name end
     return "unknown","Unknown zone"
 end
+TC.CurrentDeathZone=DeathZone
+
+function TC.ZoneDeathRows()
+    local key,name=DeathZone()
+    local rows,total={},0
+    local profiles=TC.store and TC.store.social and TC.store.social.pvp or {}
+    for owner,profile in pairs(profiles) do
+        local count=0
+        for zone,entry in pairs(profile.deathZones or {}) do
+            -- A client without map data records the zone's name instead. Keep
+            -- those observations visible without merging distinct map/instance IDs.
+            if zone==key or (key~="unknown" and entry.name==name and
+                (zone:sub(1,5)=="name:" or key:sub(1,5)=="name:")) then
+                count=count+(TC.Integer(entry.count,1,999999999) or 0)
+            end
+        end
+        if count>0 then
+            rows[#rows+1]={owner=owner,name=TC.DisplayName(owner),count=count}
+            total=total+count
+        end
+    end
+    table.sort(rows,function(a,b)
+        if a.count~=b.count then return a.count>b.count end
+        if a.name~=b.name then return a.name<b.name end
+        return a.owner<b.owner
+    end)
+    return rows,total,key,name
+end
 
 local function SaveZone(profile,key,entry)
     profile.deathZones=profile.deathZones or {}
@@ -81,6 +109,7 @@ local function RecordDeathZone(profile)
     local entry={name=name,count=(old and old.count or 0)+1,revision=math.max(time(),(old and old.revision or 0)+1)}
     profile.deathZones[key]=entry
     if TC.guildKey then BroadcastZone(key,entry) end
+    if TC.RefreshZoneDeaths then TC.RefreshZoneDeaths() end
 end
 
 local function DeathProfile(sender)
@@ -103,6 +132,7 @@ local function ReceiveZone(message,sender)
         if (kind~="map" and kind~="instance") or not TC.Integer(id,1,2147483647) then return end
     end
     SaveZone(DeathProfile(sender),key,{name=name,count=count,revision=revision})
+    if TC.RefreshZoneDeaths then TC.RefreshZoneDeaths() end
 end
 
 local function NativeDeaths()
