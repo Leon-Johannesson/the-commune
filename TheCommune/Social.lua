@@ -7,7 +7,7 @@ for word in ("aggro armor altar arrow ashen bears beast black blade blast bless 
     if #word==5 then TC.WordSolutions[#TC.WordSolutions+1]=word; TC.WordDictionary[word]=true end
 end
 
-local function Rev(n) return math.max(time(),(n or 0)+1) end
+local function Rev(n) return TC.NextRevision(n) end
 local function Log(text)
     local f=TC.db.fun; f.history=f.history or {}; table.insert(f.history,1,{when=time(),text=text})
     while #f.history>50 do table.remove(f.history) end
@@ -37,7 +37,7 @@ function TC.InitSocial()
                 if value>(TC.wallet[field][account] or 0) then TC.wallet[field][account]=value; repaired=true end
             end
         end
-        if repaired then TC.wallet.revision=math.max(time(),TC.wallet.revision or 0,cached.revision or 0)+1 end
+        if repaired then TC.wallet.revision=TC.NextRevision(math.max(TC.wallet.revision or 0,cached.revision or 0)) end
     end
     TC.RepairRecordedRewards()
     if TC.InitPvP then TC.InitPvP() end
@@ -132,9 +132,11 @@ function TC.PublishSocial(send)
     local d,day=TC.DailyState(); local answered,correct=0,0
     for i=1,QuizCount(day,d) do if d.answers[i] then answered=answered+1; if d.answers[i].correct then correct=correct+1 end end end
     local s=f.stats
+    local previous=TC.store.social.accounts[f.account]
+    if previous and previous.day~=day then w.revision=TC.NextRevision(w.revision) end
     local p={revision=w.revision,name=f.display,qa=s.qa,qc=s.qc,qd=s.qd,wp=s.wp,ww=s.ww,wg=s.wg,day=day,answered=answered,correct=correct,
         fifthAnswered=d.answers[5]~=nil,fifthCorrect=d.answers[5] and d.answers[5].correct,result=d.wordleResult or 0,earned=w.earned,spent=w.spent,title=f.title or "",transfers=w.transfers,grants=w.grants,deductions=w.deductions}
-    TC.store.social.accounts[f.account]=p; TC.store.social.characters[TC.owner]=f.account
+    TC.store.social.accounts[f.account]=TC.StampSnapshot(p,false); TC.store.social.characters[TC.owner]=f.account
     if TC.RecordOwnDailyScore then TC.RecordOwnDailyScore(day,QuizCount(day,d),d,p.revision) end
     if send and TC.guildKey and TC.QueueGuildPacket then TC.BroadcastSocial() end
 end
@@ -252,56 +254,99 @@ local function Fields(message)
     local f={}; for value in (message.."\t"):gmatch("(.-)\t") do f[#f+1]=value end; return f
 end
 local function Account(id) return type(id)=="string" and #id<=40 and id:match("^[a-zA-Z0-9%-]+$") end
-function TC.ReceiveSocial(message,sender)
+local function DeferSocial(message,sender,relayed)
+    pendingCounters[sender]=pendingCounters[sender] or {}
+    if #pendingCounters[sender]<50 then table.insert(pendingCounters[sender],{message=message,relayed=relayed}) end
+end
+local function ProfileKey(p)
+    return table.concat({p.day,p.name,p.qa,p.qc,p.qd,p.wp,p.ww,p.wg,p.answered,p.correct,p.result,p.earned,p.spent,p.title},"\t")
+end
+TC.SocialProfileKey=ProfileKey
+local function BindAccount(sender,account,revision,relayed)
+    local social=TC.store.social
+    social.characterBindings=social.characterBindings or {}
+    local old=social.characterBindings[sender]
+    local current=old and old.account or social.characters[sender]
+    if current and current~=account then
+        local profile=social.accounts[current]
+        if relayed and ((old and old.syncSource=="owner") or (not old and profile and profile.syncSource=="owner")) then return false end
+        if relayed and not TC.SnapshotNewer(old or {revision=profile and profile.revision or 0},{revision=revision},true,current,account) then return false end
+    end
+    if relayed and old and old.account==account and old.syncSource=="owner" then
+        old.revision=math.max(old.revision,revision)
+        social.characters[sender]=account
+        return true
+    end
+    if not relayed or not old or revision>=old.revision then
+        local newest=current==account and math.max(revision,old and old.revision or 0) or revision
+        social.characterBindings[sender]=TC.StampSnapshot({account=account,revision=newest},relayed)
+    end
+    social.characters[sender]=account
+    return true
+end
+function TC.ReceiveSocial(message,sender,relayed)
     if TC.ReceiveHitCache(message,sender) then return true end
     if TC.ReceivePvP and TC.ReceivePvP(message,sender) then return true end
-    if TC.ReceiveGear and TC.ReceiveGear(message,sender) then return true end
+    if TC.ReceiveGear and TC.ReceiveGear(message,sender,relayed) then return true end
     local f=Fields(message); local kind=f[1]
     if kind=="HL" or kind=="HD" then return TC.ReceiveHit(message,sender) end
     if kind=="FQ" then
         if not TC.DecodeDailyScore then return true end
         local account,score=TC.DecodeDailyScore(message)
-        if not account or account==TC.db.fun.account then return true end
+        if not account then return true end
+        if account==TC.db.fun.account then TC.ObserveOwnRevision(score.revision); return true end
         if TC.store.social.characters[sender]~=account then
-            pendingCounters[sender]=pendingCounters[sender] or {}; if #pendingCounters[sender]<50 then table.insert(pendingCounters[sender],message) end
+            DeferSocial(message,sender,relayed)
             return true
         end
-        if TC.RecordDailyScore(account,score) and score.day==TC.DayID() and TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
+        if TC.RecordDailyScore(account,score,relayed) and score.day==TC.DayID() and TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
         return true
     end
     if kind~="FA" and kind~="FB" and kind~="FG" and kind~="FD" and kind~="FW" then return false end
     if kind=="FW" then
         local day,result=TC.Integer(f[3],0,TC.DayID()),TC.Integer(f[4],1,6)
         if #f~=5 or not Account(f[2]) or not day or day~=TC.DayID() or not result or #f[5]~=result*5 or f[5]:find("[^012]") or f[5]:sub(-5)~="22222" then return true end
+        if f[2]==TC.db.fun.account then return true end
         if TC.store.social.characters[sender]~=f[2] then
-            pendingCounters[sender]=pendingCounters[sender] or {}; if #pendingCounters[sender]<50 then table.insert(pendingCounters[sender],message) end
+            DeferSocial(message,sender,relayed)
             return true
         end
-        TC.store.social.accounts[f[2]].wordBoard={day=day,result=result,colors=f[5]}
+        local profile=TC.store.social.accounts[f[2]]
+        local old=profile.wordBoard
+        local board={revision=day,day=day,result=result,colors=f[5]}
+        if old and not old.revision then old.revision=old.day end
+        if TC.SnapshotNewer(old,board,relayed,old and (old.result..":"..old.colors),result..":"..f[5]) then
+            profile.wordBoard=TC.StampSnapshot(board,relayed)
+        end
         if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end; return true
     end
     if kind=="FA" then
         if #f~=17 or not Account(f[2]) then return true end
         local values={}; for i=3,16 do if i~=4 then values[i]=TC.Integer(f[i],0,9999999999); if not values[i] then return true end end end
-        if values[3]>time()+86400 or values[12]>4 or values[13]>values[12] or values[14]>7 or #f[4]>32 or (f[17]~="" and not TC.Shop[f[17]]) then return true end
-        if f[2]==TC.db.fun.account then return true end
+        if values[3]>time()+86400 or values[11]>TC.DayID() or values[6]>values[5] or values[9]>values[8] or values[12]>4 or values[13]>values[12] or values[14]>7 or #f[4]>32 or (f[17]~="" and not TC.Shop[f[17]]) then return true end
+        if f[2]==TC.db.fun.account then TC.ObserveOwnRevision(values[3]); return true end
+        if not BindAccount(sender,f[2],values[3],relayed) then return true end
         local old=TC.store.social.accounts[f[2]]
-        TC.store.social.characters[sender]=f[2]
-        if not old or values[3]>=old.revision then
-            TC.store.social.accounts[f[2]]={revision=values[3],name=TC.Clean(f[4],32),qa=values[5],qc=values[6],qd=values[7],wp=values[8],ww=values[9],wg=values[10],day=values[11],
+        local incoming={revision=values[3],name=TC.Clean(f[4],32),qa=values[5],qc=values[6],qd=values[7],wp=values[8],ww=values[9],wg=values[10],day=values[11],
                 answered=values[12],correct=values[13],result=values[14],earned=math.max(values[15],old and old.earned or 0),spent=math.max(values[16],old and old.spent or 0),title=f[17],transfers=old and old.transfers or {},grants=old and old.grants or {},counterVersions=old and old.counterVersions or {},deductions=old and old.deductions or {},wordBoard=old and old.wordBoard}
+        local currentDay=not old or incoming.day>=old.day
+        for _,field in ipairs({"qa","qc","qd","wp","ww","wg"}) do incoming[field]=math.max(incoming[field],old and old[field] or 0) end
+        if currentDay and TC.SnapshotNewer(old,incoming,relayed,old and ProfileKey(old),ProfileKey(incoming)) then
+            TC.store.social.accounts[f[2]]=TC.StampSnapshot(incoming,relayed)
+        elseif old then
+            for _,field in ipairs({"qa","qc","qd","wp","ww","wg","earned","spent"}) do old[field]=math.max(old[field] or 0,incoming[field]) end
         end
         local waiting=pendingCounters[sender]; pendingCounters[sender]=nil
-        for _,packet in ipairs(waiting or {}) do TC.ReceiveSocial(packet,sender) end
+        for _,packet in ipairs(waiting or {}) do TC.ReceiveSocial(packet.message,sender,packet.relayed) end
     else
         local revision=TC.Integer(f[4],0,time()+86400); local amount=TC.Integer(f[5],0,9999999999)
         if #f~=5 or not Account(f[2]) or not Account(f[3]) or not revision or not amount or (kind=="FB" and f[2]==f[3]) then return true end
         if TC.store.social.characters[sender]~=f[2] then
-            pendingCounters[sender]=pendingCounters[sender] or {}; if #pendingCounters[sender]<50 then pendingCounters[sender][#pendingCounters[sender]+1]=message end
+            DeferSocial(message,sender,relayed)
             return true
         end
         local permission=TC.IsGuildMaster(sender)
-        if permission==nil then TC.DeferCreditPacket(message,sender); return true end
+        if permission==nil then TC.DeferCreditPacket(message,sender,relayed); return true end
         if not permission then return true end
         local p=TC.store.social.accounts[f[2]]; p.counterVersions=p.counterVersions or {}; p.deductions=p.deductions or {}
         local key=kind..":"..f[3]; local target=kind=="FB" and p.transfers or kind=="FD" and p.deductions or p.grants
@@ -334,7 +379,7 @@ function TC.SaveHit(slot,name,reason)
     local hits=TC.store.social.hits; hits[TC.owner]=hits[TC.owner] or {}; local slots=hits[TC.owner]
     if not slot then for i=1,20 do if not slots[i] or slots[i].deleted then slot=i; break end end end
     if not slot then return nil,"You already have 20 active hitlist entries." end
-    slots[slot]={target=target,name=TC.Clean(name,90),reason=TC.Clean(reason,80),faction=faction=="Alliance" and "Horde" or "Alliance",revision=Rev(slots[slot] and slots[slot].revision)}
+    slots[slot]=TC.StampSnapshot({target=target,name=TC.Clean(name,90),reason=TC.Clean(reason,80),faction=faction=="Alliance" and "Horde" or "Alliance",revision=Rev(slots[slot] and slots[slot].revision),fullNameKnown=true},false)
     TC.BroadcastHit(slot,slots[slot]); TC.BroadcastHitCache(); if TC.RefreshHitlist then TC.RefreshHitlist() end; return slot
 end
 function TC.BroadcastHit(slot,r)
@@ -347,6 +392,7 @@ function TC.DeleteHit(owner,slot)
     if owner~=TC.owner and TC.IsProjectOfficer(TC.owner)~=true then return nil,"You can remove your own entries; officers can remove any." end
     local r=TC.store.social.hits[owner] and TC.store.social.hits[owner][slot]; if not r then return end
     r.deleted=true; r.revision=Rev(r.revision)
+    TC.StampSnapshot(r,false)
     if owner==TC.owner then TC.BroadcastHit(slot,r) else r.officer=TC.owner; TC.BroadcastHitDelete(owner,slot,r.revision) end
     TC.BroadcastHitCache()
     if TC.RefreshHitlist then TC.RefreshHitlist() end; return true
@@ -371,7 +417,8 @@ function TC.ReceiveHit(message,sender)
     if not slot or not revision then return true end
     if not r.deleted then r.target=TC.PlayerKey(r.target) end
     local hits=TC.store.social.hits; hits[owner]=hits[owner] or {}; local old=hits[owner][slot]
-    if not old or revision>old.revision or (revision==old.revision and r.deleted) then hits[owner][slot]=r end
+    if old and old.target==r.target and old.fullNameKnown then r.name,r.fullNameKnown=old.name,true end
+    if TC.SnapshotNewer(old,r,false,old and TC.HitKey(old),TC.HitKey(r)) then hits[owner][slot]=TC.StampSnapshot(r,false) end
     if TC.RefreshHitlist then TC.RefreshHitlist() end; return true
 end
 local seenAlerts,lastAlert={},-100

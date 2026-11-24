@@ -28,20 +28,32 @@ end
 TC.GearStore=Store
 
 function TC.OwnGear()
+    if type(GetInventoryItemID)~="function" then return end
     local items={}
     for _,slot in ipairs(slots) do
-        local id=TC.Integer(Safe(GetInventoryItemID,"player",slot),1,9999999)
+        local ok,value=pcall(GetInventoryItemID,"player",slot)
+        if not ok or (issecretvalue and issecretvalue(value)) then return end
+        local id=TC.Integer(value,1,9999999)
+        if value~=nil and value~=0 and not id then return end
         if id then items[slot]=id end
     end
     local overall,equipped=Safe(GetAverageItemLevel)
     local level=TC.Integer(math.floor(tonumber(equipped) or tonumber(overall) or 0),0,9999) or 0
+    if not next(items) and (level>0 or (equipped==nil and overall==nil)) then return end
     return {items=items,ilvl=level}
+end
+
+local function GearKey(snapshot)
+    local parts={tostring(snapshot.ilvl)}
+    for _,slot in ipairs(slots) do parts[#parts+1]=slot..":"..(snapshot.items[slot] or 0) end
+    return table.concat(parts,",")
 end
 
 function TC.BroadcastGear(force)
     local store=Store()
     if not store or not TC.guildKey then return end
     local snapshot=TC.OwnGear()
+    if not snapshot then return end
     local entries={}
     for _,slot in ipairs(slots) do
         if snapshot.items[slot] then entries[#entries+1]=slot..":"..snapshot.items[slot] end
@@ -54,9 +66,9 @@ function TC.BroadcastGear(force)
     -- A forced resend answers a sync query with the snapshot guildmates may
     -- have missed; only real equipment changes earn a new revision.
     if changed or not own or not own.revision then
-        snapshot.revision=math.max(time(),((own and own.revision) or 0)+1)
+        snapshot.revision=TC.NextRevision(own and own.revision)
         snapshot.when=time()
-        store[TC.owner]=snapshot
+        store[TC.owner]=TC.StampSnapshot(snapshot,false)
     else
         snapshot=own
     end
@@ -74,7 +86,7 @@ function TC.BroadcastGear(force)
     if TC.RefreshArmory then TC.RefreshArmory() end
 end
 
-function TC.ReceiveGear(message,sender)
+function TC.ReceiveGear(message,sender,relayed)
     if type(message)~="string" or message:sub(1,3)~="GG\t" then return false end
     local store=Store(); if not store then return true end
     local rev,part,total,ilvl,payload=message:match("^GG\t(%d+)\t(%d+)\t(%d+)\t(%d+)\t(.*)$")
@@ -85,10 +97,10 @@ function TC.ReceiveGear(message,sender)
     for key,stage in pairs(stages) do
         if stage.store~=TC.store or GetTime()-stage.when>120 then stages[key]=nil else count=count+1 end
     end
-    local key=sender..":"..rev
+    local key=sender..":"..rev..(relayed and ":cache" or ":owner")
     if not stages[key] and count>=60 then return true end
-    local stage=stages[key] or {store=TC.store,total=total,parts={}}
-    if stage.total~=total then stages[key]=nil; return true end
+    local stage=stages[key] or {store=TC.store,total=total,ilvl=ilvl,parts={}}
+    if stage.total~=total or stage.ilvl~=ilvl or (stage.parts[part] and stage.parts[part]~=payload) then stages[key]=nil; return true end
     stages[key]=stage; stage.when=GetTime(); stage.parts[part]=payload
     for index=1,total do if stage.parts[index]==nil then return true end end
     stages[key]=nil
@@ -98,14 +110,15 @@ function TC.ReceiveGear(message,sender)
             local slot,id=token:match("^(%d+):(%d+)$")
             slot=TC.Integer(slot,1,19); id=TC.Integer(id,1,9999999)
             seen=seen+1
-            if not slot or not id or not allowed[slot] or seen>#slots then return true end
+            if not slot or not id or not allowed[slot] or items[slot] or seen>#slots then return true end
             items[slot]=id
         end
     end
     local old=store[sender]
     -- Gear is a snapshot, not a record set: a newer revision replaces it whole.
-    if not old or rev>old.revision then
-        store[sender]={revision=rev,ilvl=ilvl,items=items,when=time()}
+    local incoming={revision=rev,ilvl=ilvl,items=items,when=rev}
+    if TC.SnapshotNewer(old,incoming,relayed,old and GearKey(old),GearKey(incoming)) then
+        store[sender]=TC.StampSnapshot(incoming,relayed)
         if TC.RefreshArmory then TC.RefreshArmory() end
     end
     return true

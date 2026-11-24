@@ -98,7 +98,9 @@ local function RecordsFor(owner,emit)
     local p=social.pvp and social.pvp[owner]
     if p then
         local packets={Packet("PK",p.revision,p.total,p.fair,p.higher,p.below3,p.below6,p.below10,p.unknown)}
-        for _,diff in ipairs(SortedKeys(p.diffs)) do packets[#packets+1]=Packet("PL",p.revision,diff,p.diffs[diff]) end
+        for _,diff in ipairs(SortedKeys(p.diffs)) do
+            if not p.gapRevisions or (p.gapRevisions[diff] or 0)<=p.revision then packets[#packets+1]=Packet("PL",p.revision,diff,p.diffs[diff]) end
+        end
         emit(Record(owner,"p",0,p.revision,packets))
         if p.honorKills~=nil then emit(Record(owner,"h",0,p.honorRevision or 0,{Packet("PH",p.honorRevision or 0,p.honorKills)})) end
         if p.deaths~=nil then emit(Record(owner,"d",0,p.deathRevision or 0,{Packet("PT",p.deathRevision or 0,p.deaths,p.deathsLifetime and 1 or 0)})) end
@@ -197,7 +199,10 @@ function TC.QueryCache(attempt)
     end)
 end
 local function Need(session,r)
-    if r.owner==TC.owner then return false end
+    if r.owner==TC.owner then
+        if TC.ObserveOwnRevision then TC.ObserveOwnRevision(r.revision) end
+        return false
+    end
     local old=session.known[Key(r.owner,r.kind,r.id)]
     return not old or r.revision>old.revision or (r.revision==old.revision and r.hash~=old.hash)
 end
@@ -236,9 +241,11 @@ local function ScheduleRequest(session,key)
     end)
 end
 local function Apply(r,packets)
+    if r.owner==TC.owner or #packets==0 then return false end
     -- Strict per-record allowlist: a cache response cannot become a query,
     -- privileged project edit, hit deletion, or a packet for a different owner.
-    local request
+    local request,head,level
+    local parts,gaps={},{}
     for _,packet in ipairs(packets) do
         local kind=packet:match("^([^\t]+)")
         local id=packet:match("^[^\t]+\t([^\t]+)")
@@ -252,6 +259,34 @@ local function Apply(r,packets)
             (r.kind=="b" and (kind=="FB" or kind=="FG" or kind=="FD") and
                 Hash(packet:match("^([^\t]+\t[^\t]+\t[^\t]+)" ) or "")==r.id)
         if not allowed then return false end
+        local fields={}; for value in (packet.."\t"):gmatch("(.-)\t") do fields[#fields+1]=value end
+        local index=({q=3,l=2,c=3,g=2,p=2,h=2,d=2,z=3,v=3,a=3,b=4,s=4})[r.kind]
+        if index and TC.Integer(fields[index],0,time()+86400)~=r.revision then return false end
+        if r.kind~="c" and r.kind~="g" and r.kind~="p" and #packets~=1 then return false end
+        if r.kind=="c" then
+            if kind=="CB" then
+                if head then return false end
+                head=TC.Integer(fields[4],1,256); if not head then return false end
+            else
+                local part=TC.Integer(fields[4],1,256)
+                if not part or parts[part] then return false end
+                parts[part]=true
+            end
+        elseif r.kind=="g" then
+            local part,total=TC.Integer(fields[3],1,3),TC.Integer(fields[4],1,3)
+            local ilvl=TC.Integer(fields[5],0,9999)
+            if not part or not total or part>total or not ilvl or parts[part] or (head and (head~=total or level~=ilvl)) then return false end
+            head,level,parts[part]=total,ilvl,true
+        elseif r.kind=="p" then
+            if kind=="PK" then
+                if head then return false end
+                head=TC.Integer(fields[3],0,999999999); if not head then return false end
+            else
+                local gap,count=TC.Integer(fields[3],-254,254),TC.Integer(fields[4],0,999999999)
+                if not gap or not count or gaps[gap] then return false end
+                gaps[gap]=count
+            end
+        end
         if r.kind=="v" then
             local revision=TC.Integer(packet:match("^PY\t[^\t]+\t(%d+)\t"),1,time()+86400)
             if revision~=r.revision or #packets~=1 then return false end
@@ -267,8 +302,16 @@ local function Apply(r,packets)
             request={slot,value}
         end
     end
-    if request then TC.ApplyRequest(request[1],request[2],r.owner)
-    else for _,packet in ipairs(packets) do TC.ReceiveGuildData(packet,r.owner) end end
+    if r.kind=="c" or r.kind=="g" then
+        if not head or #packets~=head+(r.kind=="c" and 1 or 0) then return false end
+        for part=1,head do if not parts[part] then return false end end
+    elseif r.kind=="p" then
+        if not head then return false end
+        local total=0; for _,count in pairs(gaps) do total=total+count end
+        if total>head then return false end
+    end
+    if request then TC.ApplyRequest(request[1],request[2],r.owner,true)
+    else for _,packet in ipairs(packets) do TC.ReceiveGuildData(packet,r.owner,true) end end
     return true
 end
 
@@ -295,9 +338,9 @@ function TC.ReceiveCacheSync(message,sender)
                 session.records=records; session.index={}
                 for index,r in ipairs(records) do
                     session.index[Key(r.owner,r.kind,r.id)]={record=r,index=index}
-                    if r.owner~=sender then
-                        Send("offer:"..token..":"..index,Packet("KI",token,index,r.owner,r.kind,r.id,r.revision,r.hash,#r.fragments),true)
-                    end
+                    -- Owners see revision metadata too, but Need never requests
+                    -- their payloads. This gives restored saves a safe clock floor.
+                    Send("offer:"..token..":"..index,Packet("KI",token,index,r.owner,r.kind,r.id,r.revision,r.hash,#r.fragments),true)
                 end
             end)
         end)

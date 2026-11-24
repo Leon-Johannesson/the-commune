@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.42"
+TC.version = "0.4.43"
 TC.limit = 20
 
 function TC.Print(message)
@@ -121,8 +121,7 @@ function TC.MergeOwnerAliases(store)
         owners[canonical] = owners[canonical] or {}
         for slot, r in pairs(slots) do
             local previous = owners[canonical][slot]
-            if not previous or r.revision > previous.revision or
-                (r.revision == previous.revision and r.deleted and not previous.deleted) then
+            if TC.SnapshotNewer(previous,r,r.syncSource~="owner",previous and TC.RequestKey(slot,previous),TC.RequestKey(slot,r)) then
                 owners[canonical][slot] = r
             end
         end
@@ -163,7 +162,7 @@ function TC.SetGuild(onlyIfChanged)
     for _, r in pairs(TC.store.owners[TC.owner]) do
         if not r.deleted and (r.expires ~= 0 or r.ongoing or r.craft ~= "") then
             r.expires, r.ongoing, r.craft = 0, false, ""
-            r.revision = math.max(time(), r.revision + 1)
+            r.revision = TC.NextRevision(r.revision)
         end
     end
     TC.RequestsChanged()
@@ -246,12 +245,12 @@ function TC.Save(slot, data)
     end
     if not slot then return nil, "You have 20 active requests. Close one before adding another." end
     local previous = slots[slot]
-    local revision = math.max(time(), (previous and previous.revision or 0) + 1)
+    local revision = TC.NextRevision(previous and previous.revision)
     -- Keep the legacy wire fields empty for compatibility with older clients.
-    slots[slot] = { item = item, quantity = quantity, received = received, ongoing = false,
+    slots[slot] = TC.StampSnapshot({ item = item, quantity = quantity, received = received, ongoing = false,
         expires = 0, revision = revision,
         created = editingExisting and previous and TC.IsActive(previous) and previous.item==item and (previous.created or previous.revision) or revision,
-        purpose = TC.Clean(data.purpose, 64), craft = "", delivery = TC.Clean(data.delivery, 40) }
+        purpose = TC.Clean(data.purpose, 64), craft = "", delivery = TC.Clean(data.delivery, 40) },false)
     TC.BroadcastSlot(slot)
     TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
@@ -266,7 +265,8 @@ function TC.Close(slot)
     -- is the only closed state the R packet can express, which leaves the wire
     -- format untouched and reads the same on older clients.
     r.received = r.quantity
-    r.revision = math.max(time(), r.revision + 1)
+    r.revision = TC.NextRevision(r.revision)
+    TC.StampSnapshot(r,false)
     TC.BroadcastSlot(slot)
     TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
@@ -275,7 +275,7 @@ end
 function TC.Delete(slot)
     local r = TC.store.owners[TC.owner][slot]
     if not r then return end
-    TC.store.owners[TC.owner][slot] = { deleted = true, revision = math.max(time(), r.revision + 1) }
+    TC.store.owners[TC.owner][slot] = TC.StampSnapshot({ deleted = true, revision = TC.NextRevision(r.revision) },false)
     TC.BroadcastSlot(slot)
     TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end

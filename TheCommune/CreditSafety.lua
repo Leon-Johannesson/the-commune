@@ -22,12 +22,12 @@ function TC.RepairRecordedRewards()
     end
     if TC.guildKey and guilds==1 and expected>total then
         TC.db.creditRepair=TC.db.creditRepair or {}; TC.db.creditRepair[#TC.db.creditRepair+1]={when=time(),amount=expected-total,guild=TC.guildKey,previous=TC.wallet.earned}
-        TC.wallet.earned=TC.wallet.earned+(expected-total); TC.wallet.revision=math.max(time(),TC.wallet.revision or 0)+1
+        TC.wallet.earned=TC.wallet.earned+(expected-total); TC.wallet.revision=TC.NextRevision(TC.wallet.revision)
     end
 end
-function TC.DeferCreditPacket(message,sender)
+function TC.DeferCreditPacket(message,sender,relayed)
     local key=sender..":"..message; local n=0;for _ in pairs(deferred) do n=n+1 end
-    if n<100 then deferred[key]={message=message,sender=sender,store=TC.store,when=GetTime()} end
+    if n<100 then deferred[key]={message=message,sender=sender,store=TC.store,when=GetTime(),relayed=relayed} end
 end
 function TC.DebugCredits()
     if not TC.wallet then return end
@@ -38,6 +38,6 @@ end
 function TC.RetryDeferredCredits()
     for key,p in pairs(deferred) do
         if p.store~=TC.store or GetTime()-p.when>180 then deferred[key]=nil
-        elseif TC.IsGuildMaster(p.sender)~=nil then deferred[key]=nil; TC.ReceiveSocial(p.message,p.sender) end
+        elseif TC.IsGuildMaster(p.sender)~=nil then deferred[key]=nil; TC.ReceiveSocial(p.message,p.sender,p.relayed) end
     end
 end

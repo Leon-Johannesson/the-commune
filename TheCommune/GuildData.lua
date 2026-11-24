@@ -16,7 +16,7 @@ local function Parts(text)
 end
 
 local function Revision(old)
-    return math.max(time(), (old or 0) + 1)
+    return TC.NextRevision(old)
 end
 
 local function ValidRevision(value)
@@ -268,7 +268,7 @@ function TC.ScanProfessions(manual)
                     if not previous or previous.signature~=signature then
                         local profile={name=TC.Clean(name or ProfessionName(line) or ("Profession #"..line),48),
                             rank=rank or 0,maxRank=maxRank or 0,recipes=recipes,revision=Revision(previous and previous.revision),signature=signature}
-                        mine.professions[line]=profile; TC.store.professionNames[line]=profile.name; changed=true
+                        mine.professions[line]=TC.StampSnapshot(profile,false); TC.store.professionNames[line]=profile.name; changed=true
                     end
                     AddCatalog(line,recipes)
                 end
@@ -277,7 +277,7 @@ function TC.ScanProfessions(manual)
     end
     if next(seen) then
         for id in pairs(mine.professions) do if not seen[id] then mine.professions[id]=nil; changed=true end end
-        if changed then mine.revision=Revision(mine.revision) end
+        if changed then mine.revision=Revision(mine.revision); TC.StampSnapshot(mine,false) end
     end
     local count=0
     for _,profile in pairs(mine.professions) do for _,learned in pairs(profile.recipes) do if learned then count=count+1 end end end
@@ -519,9 +519,11 @@ local function ApplyProject(id,body,sender)
         item=TC.Integer(f[6],0,2147483647),quantity=TC.Integer(f[7],1,999999),received=TC.Integer(f[8],0,999999),description=TC.Clean(f[9],240)}
     if not p.item or not p.quantity or not p.received or p.received>p.quantity or (not p.deleted and p.title=="") then return end
     local old=TC.store.projects[id]
-    if not old or revision>old.revision or (revision==old.revision and p.writer>old.writer) or
-        (revision==old.revision and p.writer==old.writer and p.deleted and not old.deleted) then
-        TC.store.projects[id]=p; RefreshProjects()
+    local function Key(p)
+        return table.concat({p.writer,p.title or "",p.item or 0,p.quantity or 1,p.received or 0,p.description or ""},"\t")
+    end
+    if TC.SnapshotNewer(old,p,false,old and Key(old),Key(p)) then
+        TC.store.projects[id]=TC.StampSnapshot(p,false); RefreshProjects()
     end
 end
 
@@ -533,9 +535,9 @@ local function PruneStages(stages)
     return count
 end
 
-function TC.ReceiveGuildData(message,sender)
-    if TC.ReceiveSocial and TC.ReceiveSocial(message,sender) then return true end
+function TC.ReceiveGuildData(message,sender,relayed)
     if type(message)~="string" or #message>254 then return true end
+    if TC.ReceiveSocial and TC.ReceiveSocial(message,sender,relayed) then return true end
     local kind=message:match("^([^\t]+)")
     if kind=="CM" then if TC.ReceiveRecipeMetadata then TC.ReceiveRecipeMetadata(message,sender) end; return true end
     if kind=="CL" then
@@ -549,9 +551,14 @@ function TC.ReceiveGuildData(message,sender)
         end
         local profile=TC.store.crafts[sender] or {professions={},revision=0}
         TC.store.crafts[sender]=profile
-        if revision>profile.revision then
+        local function RosterKey(lines)
+            local sorted={}; for id in pairs(lines or {}) do sorted[#sorted+1]=id end
+            table.sort(sorted); return table.concat(sorted,",")
+        end
+        if TC.SnapshotNewer(profile,{revision=revision},relayed,RosterKey(profile.roster or profile.professions),RosterKey(roster)) then
             profile.revision=revision; profile.roster=roster
-            for id in pairs(profile.professions) do if not roster[id] then profile.professions[id]=nil end end
+            TC.StampSnapshot(profile,relayed)
+            for id,p in pairs(profile.professions) do if not roster[id] and p.revision<=revision then profile.professions[id]=nil end end
             RefreshRecipes()
         end
         return true
@@ -563,8 +570,8 @@ function TC.ReceiveGuildData(message,sender)
         TC.store.crafts[sender]=profile
         if profile.roster and not profile.roster[line] and revision<=profile.revision then return true end
         local old=profile.professions[line]
-        if old and revision<=old.revision then return true end
-        local key=sender..":"..line
+        if old and (revision<old.revision or (revision==old.revision and relayed and old.syncSource=="owner")) then return true end
+        local key=sender..":"..line..(relayed and ":cache" or ":owner")
         PruneStages(craftStages)
         local stage=craftStages[key]
         if kind=="CB" then
@@ -575,6 +582,7 @@ function TC.ReceiveGuildData(message,sender)
                 craftStages[key]=stage
             end
             if stage.revision==revision then
+                if stage.total and (stage.total~=total or stage.name~=TC.Clean(f[5],48) or stage.rank~=rank or stage.maxRank~=maxRank) then craftStages[key]=nil; return true end
                 stage.total=total; stage.name=TC.Clean(f[5],48); stage.rank=rank; stage.maxRank=maxRank; stage.when=GetTime()
             end
         else
@@ -585,6 +593,7 @@ function TC.ReceiveGuildData(message,sender)
                 stage={revision=revision,chunks={},store=TC.store,when=GetTime()}; craftStages[key]=stage
             end
             if stage.revision~=revision or (stage.total and index>stage.total) then return true end
+            if stage.chunks[index] and stage.chunks[index]~=f[5] then craftStages[key]=nil; return true end
             stage.chunks[index]=f[5]
             stage.when=GetTime()
         end
@@ -600,9 +609,14 @@ function TC.ReceiveGuildData(message,sender)
                 end
             end
             if complete then
-                profile.professions[line]={revision=stage.revision,name=stage.name,rank=stage.rank,maxRank=stage.maxRank,recipes=recipes}
-                TC.store.professionNames[line]=stage.name
-                AddCatalog(line,recipes); craftStages[key]=nil; RefreshRecipes()
+                local incoming={revision=stage.revision,name=stage.name,rank=stage.rank,maxRank=stage.maxRank,recipes=recipes}
+                local function Key(p) return table.concat(TC.ProfessionPackets(line,p),"\n") end
+                if TC.SnapshotNewer(old,incoming,relayed,old and Key(old),Key(incoming)) then
+                    profile.professions[line]=TC.StampSnapshot(incoming,relayed)
+                    TC.store.professionNames[line]=stage.name
+                    AddCatalog(line,recipes); RefreshRecipes()
+                end
+                craftStages[key]=nil
             end
         end
         return true

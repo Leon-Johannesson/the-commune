@@ -35,8 +35,9 @@ function TC.RefreshHonorStats(send)
     if not TC.db or not TC.db.fun or not TC.db.fun.pvp then return end
     local value=TC.Integer(Safe(GetPVPLifetimeStats),0,999999999)
     local p=TC.db.fun.pvp[TC.owner]
+    if value and p then value=math.max(value,p.honorKills or 0) end
     if value and p and value~=p.honorKills then
-        p.honorKills=value; p.honorRevision=math.max(time(),(p.honorRevision or 0)+1)
+        p.honorKills=value; p.honorRevision=TC.NextRevision(p.honorRevision)
         if send then TC.BroadcastPvP() end
         if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
     end
@@ -82,7 +83,8 @@ function TC.RecordPvPKill(timestamp,event,sourceGUID,destGUID)
         bucket=math.abs(diff)<=2 and "fair" or diff>=3 and "higher" or diff>=-5 and "below3" or diff>=-9 and "below6" or "below10"
         p.diffs[diff]=(p.diffs[diff] or 0)+1
     end
-    p[bucket]=p[bucket]+1; p.revision=math.max(time(),p.revision+1)
+    p[bucket]=p[bucket]+1; p.revision=TC.NextRevision(p.revision)
+    if diff then p.gapRevisions=p.gapRevisions or {}; p.gapRevisions[diff]=p.revision end
     TC.BroadcastPvP(diff or false)
     if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
     return true
@@ -115,13 +117,14 @@ function TC.ReceivePvP(message,sender)
         local value=TC.Integer(f[3],0,999999999)
         if #f~=3 or not value then return true end
         local p=all[sender] or Empty()
-        if rev>=(p.honorRevision or 0) then p.honorKills=value; p.honorRevision=rev; all[sender]=p end
+        if rev>=(p.honorRevision or 0) and value>=(p.honorKills or 0) then p.honorKills=value; p.honorRevision=rev; all[sender]=p end
     elseif kind=="PK" then
         if #f~=9 then return true end
         local values={}; for i=3,9 do values[i]=TC.Integer(f[i],0,999999999); if not values[i] then return true end end
         local sum=0; for i=4,9 do sum=sum+values[i] end; if sum~=values[3] then return true end
         local p=all[sender] or Empty()
-        if rev>=p.revision and values[3]>=p.total then
+        local monotonic=values[4]>=p.fair and values[5]>=p.higher and values[6]>=p.below3 and values[7]>=p.below6 and values[8]>=p.below10 and values[9]>=p.unknown
+        if rev>=p.revision and values[3]>=p.total and monotonic then
             p.revision,p.total,p.fair,p.higher,p.below3,p.below6,p.below10,p.unknown=rev,unpack(values,3,9)
             all[sender]=p
         end
@@ -129,7 +132,10 @@ function TC.ReceivePvP(message,sender)
         local diff,count=TC.Integer(f[3],-254,254),TC.Integer(f[4],0,999999999)
         if #f~=4 or not diff or not count then return true end
         all[sender]=all[sender] or Empty()
-        all[sender].diffs[diff]=math.max(all[sender].diffs[diff] or 0,count)
+        local p=all[sender]; p.gapRevisions=p.gapRevisions or {}
+        if rev>=(p.gapRevisions[diff] or 0) and count>=(p.diffs[diff] or 0) then
+            p.diffs[diff]=count; p.gapRevisions[diff]=rev
+        end
     end
     if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end; return true
 end

@@ -30,25 +30,30 @@ function TC.DecodeDailyScore(message)
     return account, {day=day, revision=revision, total=total, colors=colors, answered=answered, correct=correct, wordleResult=wordle}
 end
 
-function TC.RecordDailyScore(account, score)
-    local all = Scores()
-    if not all then return end
-    local days = all[account] or {}
-    local old = days[score.day]
+function TC.DailyScoreAdvances(old,score)
     if old then
-        if score.revision < old.revision or score.total ~= old.total then return end
+        if score.revision < old.revision or score.total ~= old.total then return false end
         -- Answers and completed Wordle results are final. A delayed or relayed
         -- snapshot cannot erase them, including a wrong answer worth zero points.
         for i = 1, old.total do
             local previous = old.colors:sub(i, i)
-            if previous ~= "0" and previous ~= score.colors:sub(i, i) then return end
+            if previous ~= "0" and previous ~= score.colors:sub(i, i) then return false end
         end
-        if old.wordleResult ~= 0 and score.wordleResult ~= old.wordleResult then return end
-        if score.revision == old.revision and score.colors == old.colors and score.wordleResult == old.wordleResult then return end
+        if old.wordleResult ~= 0 and score.wordleResult ~= old.wordleResult then return false end
+        if score.revision == old.revision and score.colors == old.colors and score.wordleResult == old.wordleResult then return false end
     end
+    return true
+end
+
+function TC.RecordDailyScore(account, score, relayed)
+    local all = Scores()
+    if not all then return end
+    local days = all[account] or {}
+    local old = days[score.day]
+    if not TC.DailyScoreAdvances(old,score) then return end
     local profile = TC.store.social.accounts[account]
     score.name = TC.Clean(profile and profile.name or (old and old.name) or "Unknown", 32)
-    days[score.day], all[account] = score, days
+    days[score.day], all[account] = TC.StampSnapshot(score,relayed), days
     return true
 end
 

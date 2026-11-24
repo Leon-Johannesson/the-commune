@@ -53,7 +53,7 @@ function TC.SetRecipeMetadata(id,line,required,kind,source)
     if newEntry then TC.store.catalog[id]=entry end
     if entry.requiredSkill~=required or entry.sourceKind~=kind or entry.source~=source then
         entry.requiredSkill,entry.sourceKind,entry.source=required,kind,source
-        entry.metaRevision=math.max(time(),(entry.metaRevision or 0)+1)
+        entry.metaRevision=TC.NextRevision(entry.metaRevision)
         entry.metaWriter=TC.owner
         if TC.InvalidateRecipes then TC.InvalidateRecipes() end
         return true
@@ -186,8 +186,8 @@ function TC.ScanTrainerRequirements()
                         local learned=service=="used"
                         if profession.recipes[id]~=learned then
                             profession.recipes[id]=learned; profession.signature=nil
-                            profession.revision=math.max(time(),profession.revision+1)
-                            mine.revision=math.max(time(),mine.revision+1); changed=true
+                            profession.revision=TC.NextRevision(profession.revision)
+                            mine.revision=TC.NextRevision(mine.revision); changed=true
                         end
                     end
                 end

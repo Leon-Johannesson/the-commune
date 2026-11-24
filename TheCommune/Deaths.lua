@@ -126,7 +126,7 @@ local function RecordDeathZone(profile)
     local key,name=DeathZone()
     profile.deathZones=profile.deathZones or {}
     local old=profile.deathZones[key]
-    local entry={name=name,count=(old and old.count or 0)+1,revision=math.max(time(),(old and old.revision or 0)+1)}
+    local entry={name=name,count=(old and old.count or 0)+1,revision=TC.NextRevision(old and old.revision)}
     entry.pve,entry.pvp=old and old.pve or 0,old and old.pvp or 0
     entry.typeRevision,entry.typeCount=entry.revision,entry.count
     profile.deathZones[key]=entry
@@ -139,7 +139,7 @@ function TC.RecordZoneDeathCause(profile,key,cause,store)
     local entry=profile.deathZones and profile.deathZones[key]
     if not entry or (cause~="pve" and cause~="pvp") or (entry.pve or 0)+(entry.pvp or 0)>=entry.count then return end
     entry[cause]=(entry[cause] or 0)+1
-    entry.revision=math.max(time(),entry.revision+1)
+    entry.revision=TC.NextRevision(entry.revision)
     entry.typeRevision,entry.typeCount=entry.revision,entry.count
     if TC.guildKey and TC.store==store then BroadcastZone(key,entry) end
     if TC.RefreshZoneDeaths then TC.RefreshZoneDeaths() end
@@ -194,7 +194,7 @@ function TC.RefreshDeathStats(send)
     if value==nil then value=p.deaths or p.deathsObserved or 0 end
     if lifetime and p.deathsLifetime then value=math.max(value,p.deaths or 0) end
     if value~=p.deaths or lifetime~=p.deathsLifetime then
-        p.deaths=value; p.deathsLifetime=lifetime; p.deathRevision=math.max(time(),(p.deathRevision or 0)+1)
+        p.deaths=value; p.deathsLifetime=lifetime; p.deathRevision=TC.NextRevision(p.deathRevision)
         if send then TC.BroadcastPvP() end
         if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
     end
@@ -210,7 +210,11 @@ function TC.ReceiveDeaths(message,sender)
     revision=TC.Integer(revision,0,time()+86400); count=TC.Integer(count,0,999999999)
     if not revision or not count then return true end
     local p=DeathProfile(sender)
-    if revision>=(p.deathRevision or 0) then p.deaths=count; p.deathRevision=revision; p.deathsLifetime=source=="1" end
+    local lifetime=source=="1"
+    if revision>=(p.deathRevision or 0) and (not p.deathsLifetime or lifetime) and
+        (lifetime~=not not p.deathsLifetime or count>=(p.deaths or 0)) then
+        p.deaths=count; p.deathRevision=revision; p.deathsLifetime=lifetime
+    end
     if TC.RefreshSocialWindow then TC.RefreshSocialWindow() end; return true
 end
 local events=CreateFrame("Frame")

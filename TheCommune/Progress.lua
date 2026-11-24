@@ -44,7 +44,8 @@ local function RecordGain(item, quantity, source, targets)
         if r and (not targets or targets[slot] == r) and r.item == item and TC.IsActive(r) then
             local amount = math.min(remaining, r.quantity - r.received)
             r.received = r.received + amount
-            r.revision = math.max(time(), r.revision + 1)
+            r.revision = TC.NextRevision(r.revision)
+            TC.StampSnapshot(r,false)
             remaining, credited = remaining - amount, credited + amount
             TC.BroadcastSlot(slot)
             if remaining == 0 then break end

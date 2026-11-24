@@ -2,6 +2,9 @@ local _,TC=...
 local stages={}
 local hitStore
 local stats={sent=0,received=0,applied=0,rejected=0}
+function TC.HitKey(r)
+    return table.concat({r.target or "",r.faction or "",r.reason or "",r.officer or ""},"\t")
+end
 local function Fields(message)
     local result={}; for value in (message.."\t"):gmatch("(.-)\t") do result[#result+1]=value end; return result
 end
@@ -15,7 +18,7 @@ function TC.InitHitlist()
             for slot,r in pairs(slots) do
                 if not r.deleted then r.target=TC.PlayerKey(r.name or r.target) end
                 local old=rebuilt[owner][slot]
-                if not old or r.revision>old.revision or (r.revision==old.revision and r.deleted) then rebuilt[owner][slot]=r end
+                if TC.SnapshotNewer(old,r,r.syncSource~="owner",old and TC.HitKey(old),TC.HitKey(r)) then rebuilt[owner][slot]=r end
             end
         end
     end
@@ -59,11 +62,19 @@ function TC.ReceiveHitCache(message,sender)
     if #f~=5 or (f[1]~="0" and f[1]~="1") or #f[2]>90 or #f[4]>80 or #f[5]>100 then stats.rejected=stats.rejected+1; return true end
     local deleted=f[1]=="1"; local target=TC.PlayerKey(f[2]); local actor=TC.NormalizeName(f[5])
     if not actor or (actor~=owner and TC.IsProjectOfficer(actor)~=true) or (not deleted and (not target or actor~=owner or (f[3]~="Alliance" and f[3]~="Horde"))) then stats.rejected=stats.rejected+1; return true end
+    if owner==TC.owner then
+        TC.ObserveOwnRevision(revision)
+        if not deleted or actor==owner then return true end
+    end
     local slots=TC.store.social.hits[owner] or {}; TC.store.social.hits[owner]=slots
     local old=slots[slot]
-    if not old or revision>old.revision or (revision==old.revision and (deleted or not old.deleted)) then
-        slots[slot]={revision=revision,deleted=deleted,target=target,name=TC.Clean(f[2],90),faction=f[3],reason=TC.Clean(f[4],80),officer=actor~=owner and actor or nil}
+    local incoming={revision=revision,deleted=deleted,target=target,name=TC.Clean(f[2],90),faction=f[3],reason=TC.Clean(f[4],80),officer=actor~=owner and actor or nil,fullNameKnown=true}
+    local relayed=sender~=actor
+    if TC.SnapshotNewer(old,incoming,relayed,old and TC.HitKey(old),TC.HitKey(incoming)) then
+        slots[slot]=TC.StampSnapshot(incoming,relayed)
         stats.applied=stats.applied+1
+    elseif old and not old.fullNameKnown and old.revision==revision and TC.HitKey(old)==TC.HitKey(incoming) then
+        old.name,old.fullNameKnown=incoming.name,true
     end
     if TC.RefreshHitlist then TC.RefreshHitlist() end
     return true

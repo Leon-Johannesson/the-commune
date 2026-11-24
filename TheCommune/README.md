@@ -1,4 +1,14 @@
-# The Commune — 0.4.42
+# The Commune — 0.4.43
+
+## Safer offline cache sharing (0.4.43)
+
+Guild data continues to use the original record revision, never the time somebody relays it. Higher revisions win; at equal revisions, deletion wins. Direct owner snapshots take priority over conflicting cached copies at the same revision, and conflicting cache copies resolve consistently. Live and cached multipart snapshots assemble separately, and incomplete or inconsistent cache payloads are rejected.
+
+Saved snapshots now keep local source and receipt metadata. A per-character, per-guild revision high-water mark remembers newer versions reported by guildmates, so the next local edit can advance beyond them after restoring an older save. Your own cached payloads are still not imported over your local data. These additive SavedVariables fields preserve existing saves and do not change the legacy packet formats.
+
+Stale relays cannot roll displayed daily results back to an earlier day, rebind an account identity established directly by its player, lower cumulative honor/death counters, or erase newer professions. Lifetime game totals merge monotonically, completed daily answers remain protected, and unavailable inventory APIs leave the previous gear snapshot intact. Credit permissions and receipt rules remain in force.
+
+These checks cannot recreate missing local history with certainty, and older addon versions still apply their own conflict rules. All guildmates should update. Offline regression checks cover revision conflicts, cache transfers, recovery migrations and existing features; mixed-version behavior still needs verification with two clients in game.
 
 ## Even-level guild announcements (0.4.42)
 

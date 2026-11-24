@@ -81,6 +81,10 @@ function TC.Decode(message)
     return slot, r
 end
 
+function TC.RequestKey(slot,r)
+    return TC.Encode(slot,r,true).."\t"..(r.createdKnown and r.created or 0)
+end
+
 local function Enqueue(key, message)
     if not TC.guildKey then return end
     if not pending[key] then
@@ -150,6 +154,7 @@ end
 
 function TC.Receive(prefix, message, channel, sender)
     if prefix ~= PREFIX or channel ~= "GUILD" or not TC.guildKey then return end
+    if type(message)~="string" or #message>254 then return end
     sender = TC.NormalizeName(sender)
     if not sender or sender == TC.owner then return end
     local firstPeer=not peerSeen
@@ -180,17 +185,18 @@ function TC.Receive(prefix, message, channel, sender)
 end
 
 -- Shared by direct updates and validated cache transfers.
-function TC.ApplyRequest(slot,r,sender)
+function TC.ApplyRequest(slot,r,sender,relayed)
+    if sender==TC.owner then return end
     TC.store.owners[sender] = TC.store.owners[sender] or {}
     local previous = TC.store.owners[sender][slot]
-    if not previous or r.revision > previous.revision or (r.revision==previous.revision and r.createdKnown and
-        (not previous.createdKnown or r.created~=previous.created)) then
+    local newer=TC.SnapshotNewer(previous,r,relayed,previous and TC.RequestKey(slot,previous),TC.RequestKey(slot,r))
+    if newer then
         if not r.created and not r.deleted then
             r.created=previous and not previous.deleted and previous.item==r.item and
                 (previous.created or previous.revision) or r.revision
             r.createdKnown=previous and previous.createdKnown or false
         end
-        TC.store.owners[sender][slot] = r
+        TC.store.owners[sender][slot] = TC.StampSnapshot(r,relayed)
         stats.applied = stats.applied + 1
         TC.RequestsChanged()
         if not r.deleted and TC.LearnItem and not (TC.db.itemIndex and TC.db.itemIndex[r.item]) then TC.LearnItem(r.item) end
