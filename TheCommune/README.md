@@ -1,4 +1,14 @@
-# The Commune — 0.4.37
+# The Commune — 0.4.38
+
+## Shared daily quiz results and saved scores (0.4.38)
+
+Daily Quiz now has a compact Guild today panel beside the questions. Each guild account shows its score and one tile per question: green + for correct, red x for wrong, and grey - for unanswered. Partial quizzes remain visibly unfinished. Six accounts fit at once; scroll over the panel for more, or hover a row for the full name and right/wrong/unanswered counts. No selected answers or answer text are shared. The main quiz, rewards, and daily reset are unchanged.
+
+The addon also retains a dated score record for each guild account it receives, including the quiz's correct/answered/total counts, per-question outcomes, and Wordle result when available. These records survive daily resets and reloads and are retained without an automatic age cutoff. The history has no player-facing screen yet. Scores are account-wide within each guild, so alts do not create separate daily entries. Saved history can catch up through the existing offline cache-sharing system.
+
+Guildmates need 0.4.38 or newer to publish exact quiz tiles and daily score history. Today's saved local answers are picked up when updating. Earlier remote days, missing players, and missed results are not invented; an absent result is not a failed quiz. As with other guild data, a score must reach an online peer before it can be cached and forwarded. SavedVariables reach disk on a normal reload/logout.
+
+For future data work, the retained records are in each guild's `social.dailyScores[account][utcDay]`. A record includes `name`, `revision`, `total`, `answered`, `correct`, `colors` (0 unanswered, 1 wrong, 2 correct), and `wordleResult` (0 unfinished, 1–6 solved, 7 lost). `utcDay` is the Unix day number used by the daily games. Recording or receiving a score does not award credits or modify attempts.
 
 ## Guild deaths in your current zone (0.4.37)
 

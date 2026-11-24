@@ -1,5 +1,6 @@
 local _,TC=...
 local window,pages,current,flight
+local quizColors={[0]={0.23,0.24,0.25},[1]={0.70,0.26,0.25},[2]={0.30,0.59,0.38}}
 local function Label(parent,text,x,y,width,height)
     local f=parent:CreateFontString(nil,"OVERLAY","GameFontHighlight")
     f:SetPoint("TOPLEFT",x,y); f:SetText(text); f:SetJustifyH("LEFT")
@@ -60,6 +61,41 @@ local function Build()
     q.message=Label(q,"",24,-412,700,104)
     q.previous=Button(q,"Previous",24,-550,120,function() q.slot=q.slot==1 and TC.DailyQuizCount() or q.slot-1; TC.RefreshSocialWindow() end)
     q.next=Button(q,"Next",158,-550,120,function() q.slot=q.slot>=TC.DailyQuizCount() and 1 or q.slot+1; TC.RefreshSocialWindow() end)
+
+    q.guildArea=CreateFrame("Frame",nil,q); q.guildArea:SetSize(172,344)
+    q.guildHeading=Label(q.guildArea,"Guild today",0,0,172,18)
+    q.guildLegend=Label(q.guildArea,"|cff69bc80+ Right|r  |cffe07872x Wrong|r  |cff909090- To do|r",0,-20,172,16)
+    q.guildLegend:SetFontObject("GameFontHighlightSmall")
+    q.guildRows={}; q.boardOffset=0
+    local function ScrollQuiz(_,delta)
+        q.boardOffset=math.max(0,q.boardOffset-delta); TC.RefreshSocialWindow()
+    end
+    q.guildArea:EnableMouseWheel(true); q.guildArea:SetScript("OnMouseWheel",ScrollQuiz)
+    for i=1,6 do
+        local row=CreateFrame("Frame",nil,q.guildArea); row:SetSize(172,40); row:SetPoint("TOPLEFT",0,-42-(i-1)*44)
+        row.name=Label(row,"",0,0,128,16); row.name:SetFontObject("GameFontHighlightSmall")
+        row.score=Label(row,"",132,0,40,16); row.score:SetJustifyH("RIGHT")
+        row.tiles={}
+        for slot=1,5 do
+            local tile=CreateFrame("Frame",nil,row,"BackdropTemplate")
+            tile:SetSize(19,17); tile:SetPoint("TOPLEFT",(slot-1)*23,-19)
+            tile:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8"})
+            tile.mark=tile:CreateFontString(nil,"OVERLAY","GameFontHighlightSmall"); tile.mark:SetPoint("CENTER")
+            row.tiles[slot]=tile
+        end
+        row:EnableMouse(true); row:EnableMouseWheel(true); row:SetScript("OnMouseWheel",ScrollQuiz)
+        row:SetScript("OnEnter",function(self)
+            if not self.entry then return end
+            local s=self.entry.score
+            GameTooltip:SetOwner(self,"ANCHOR_RIGHT"); GameTooltip:SetText(self.entry.name)
+            GameTooltip:AddLine(s.correct.." correct, "..(s.answered-s.correct).." wrong, "..(s.total-s.answered).." unanswered.",0.85,0.85,0.85,true)
+            GameTooltip:Show()
+        end)
+        row:SetScript("OnLeave",function() GameTooltip:Hide() end)
+        q.guildRows[i]=row
+    end
+    q.guildHint=Label(q.guildArea,"No shared results yet.",0,-310,172,32)
+    q.guildHint:SetFontObject("GameFontDisableSmall")
 
 
     local w=pages.wordle
@@ -203,6 +239,25 @@ function TC.RefreshSocialWindow()
         p.question:SetText(question.question)
         for i,b in ipairs(p.buttons) do b:SetText(question.options[i]); b:SetEnabled(a==nil) end
         p.message:SetText(a and ((a.correct and "Correct! +1 Social Credit.\n" or "Not quite.\n").."Answer: "..question.answer.."\n"..question.explanation) or "")
+        local boards=TC.QuizBoards()
+        if p.boardDay~=TC.DayID() then p.boardDay=TC.DayID(); p.boardOffset=0 end
+        p.boardOffset=math.min(p.boardOffset,math.max(0,#boards-6))
+        for i,row in ipairs(p.guildRows) do
+            local entry=boards[p.boardOffset+i]; row.entry=entry; row:SetShown(entry~=nil)
+            if entry then
+                local s=entry.score
+                row.name:SetText(entry.name); row.score:SetText(s.correct.."/"..s.total)
+                for slot,tile in ipairs(row.tiles) do
+                    tile:SetShown(slot<=s.total)
+                    local value=tonumber(s.colors:sub(slot,slot)) or 0
+                    local color=quizColors[value]
+                    tile:SetBackdropColor(color[1],color[2],color[3],1)
+                    tile.mark:SetText(value==2 and "+" or value==1 and "x" or "-")
+                end
+            end
+        end
+        p.guildHint:SetText(#boards==0 and "No shared results yet." or (#boards>6 and
+            ((p.boardOffset+1).."-"..math.min(#boards,p.boardOffset+6).." of "..#boards.."  |  Scroll") or ""))
     elseif current=="wordle" then
         local p=pages.wordle; local letters={}; local active=#d.guesses+1
         local _,day=TC.DailyState()

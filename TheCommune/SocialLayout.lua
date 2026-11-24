@@ -21,11 +21,13 @@ function TC.LayoutSocialPages(window,main,pages)
     local content=math.min(720,width-48); local left=(width-content)/2
     TC.LayoutAim(pages.aim,width,height)
     local q=pages.quiz; local top=68+math.max(0,math.floor((height-68-374)/2))
-    Place(q.header,left,top,content,18); q.header:SetJustifyH("CENTER")
-    Place(q.question,left,top+30,content,64); q.question:SetJustifyH("CENTER")
-    for i,b in ipairs(q.buttons) do Place(b,left,top+106+(i-1)*40,content,32) end
-    Place(q.message,left,top+270,content,64); q.message:SetJustifyH("CENTER")
-    Place(q.previous,width/2-128,top+346,120,28); Place(q.next,width/2+8,top+346,120,28)
+    local quizWidth=content-196; local center=left+quizWidth/2
+    Place(q.header,left,top,quizWidth,18); q.header:SetJustifyH("CENTER")
+    Place(q.question,left,top+30,quizWidth,64); q.question:SetJustifyH("CENTER")
+    for i,b in ipairs(q.buttons) do Place(b,left,top+106+(i-1)*40,quizWidth,32) end
+    Place(q.message,left,top+270,quizWidth,64); q.message:SetJustifyH("CENTER")
+    Place(q.previous,center-128,top+346,120,28); Place(q.next,center+8,top+346,120,28)
+    Place(q.guildArea,left+quizWidth+24,top,172,344)
     local w=pages.wordle; top=68+math.max(0,math.floor((height-68-400)/2))
     Place(w.header,12,top,width-24,18); Place(w.message,12,top+18,width-24,18)
     w.gridX=(width-216)/2; w.gridY=top+36

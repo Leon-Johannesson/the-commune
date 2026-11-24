@@ -135,6 +135,7 @@ function TC.PublishSocial(send)
     local p={revision=w.revision,name=f.display,qa=s.qa,qc=s.qc,qd=s.qd,wp=s.wp,ww=s.ww,wg=s.wg,day=day,answered=answered,correct=correct,
         fifthAnswered=d.answers[5]~=nil,fifthCorrect=d.answers[5] and d.answers[5].correct,result=d.wordleResult or 0,earned=w.earned,spent=w.spent,title=f.title or "",transfers=w.transfers,grants=w.grants,deductions=w.deductions}
     TC.store.social.accounts[f.account]=p; TC.store.social.characters[TC.owner]=f.account
+    if TC.RecordOwnDailyScore then TC.RecordOwnDailyScore(day,QuizCount(day,d),d,p.revision) end
     if send and TC.guildKey and TC.QueueGuildPacket then TC.BroadcastSocial() end
 end
 local function Changed()
@@ -233,6 +234,7 @@ function TC.BroadcastSocial()
     local answered=math.min(p.answered-(p.fifthAnswered and 1 or 0),4)
     local correct=p.correct-(p.fifthCorrect and 1 or 0)
     TC.QueueGuildPacket("social-head",table.concat({"FA",f.account,p.revision,p.name,p.qa,p.qc,p.qd,p.wp,p.ww,p.wg,p.day,answered,correct,p.result,p.earned,p.spent,p.title},"\t"))
+    if TC.BroadcastDailyScore then TC.BroadcastDailyScore() end
     for to,amount in pairs(w.transfers) do TC.QueueGuildPacket("social-transfer:"..to,table.concat({"FB",f.account,to,p.revision,amount},"\t")) end
     if TC.IsGuildMaster(TC.owner)==true then
         for to,amount in pairs(w.deductions) do TC.QueueGuildPacket("social-deduction:"..to,table.concat({"FD",f.account,to,p.revision,amount},"\t")) end
@@ -256,6 +258,17 @@ function TC.ReceiveSocial(message,sender)
     if TC.ReceiveGear and TC.ReceiveGear(message,sender) then return true end
     local f=Fields(message); local kind=f[1]
     if kind=="HL" or kind=="HD" then return TC.ReceiveHit(message,sender) end
+    if kind=="FQ" then
+        if not TC.DecodeDailyScore then return true end
+        local account,score=TC.DecodeDailyScore(message)
+        if not account or account==TC.db.fun.account then return true end
+        if TC.store.social.characters[sender]~=account then
+            pendingCounters[sender]=pendingCounters[sender] or {}; if #pendingCounters[sender]<50 then table.insert(pendingCounters[sender],message) end
+            return true
+        end
+        if TC.RecordDailyScore(account,score) and score.day==TC.DayID() and TC.RefreshSocialWindow then TC.RefreshSocialWindow() end
+        return true
+    end
     if kind~="FA" and kind~="FB" and kind~="FG" and kind~="FD" and kind~="FW" then return false end
     if kind=="FW" then
         local day,result=TC.Integer(f[3],0,TC.DayID()),TC.Integer(f[4],1,6)

@@ -5,7 +5,7 @@ local incoming,outgoing,lastQuery={}, {}, -100
 local serial=0
 local sharedSnapshot
 local MAX_RECORDS,MAX_PARTS,FRAGMENT=4096,512,160
-local kinds={q=true,l=true,c=true,g=true,p=true,h=true,d=true,z=true,a=true,b=true,w=true}
+local kinds={q=true,l=true,c=true,g=true,p=true,h=true,d=true,z=true,a=true,b=true,w=true,s=true}
 local function Owner(owner)
     return type(owner)=="string" and #owner<=100 and not owner:find("[%c]") and TC.NormalizeName(owner)==owner
 end
@@ -126,6 +126,13 @@ local function RecordsFor(owner,emit)
         if word and word.day==TC.DayID() then
             emit(Record(owner,"w",account,a.revision,{Packet("FW",account,word.day,word.result,word.colors)}))
         end
+        local history=social.dailyScores and social.dailyScores[account]
+        for _,day in ipairs(SortedKeys(history)) do
+            local score=history[day]
+            if TC.DailyScorePacket then
+                emit(Record(owner,"s",account..":"..day,score.revision,{TC.DailyScorePacket(account,day,score)}))
+            end
+        end
     end
 end
 local function Build(done)
@@ -238,9 +245,15 @@ local function Apply(r,packets)
             (r.kind=="g" and kind=="GG") or (r.kind=="p" and (kind=="PK" or kind=="PL")) or
             (r.kind=="h" and kind=="PH") or (r.kind=="d" and kind=="PT") or (r.kind=="z" and kind=="PZ" and Hash(id or "")==r.id) or
             (r.kind=="a" and kind=="FA" and id==r.id) or (r.kind=="w" and kind=="FW" and id==r.id) or
+            (r.kind=="s" and kind=="FQ" and r.id==(id or "")..":"..(packet:match("^FQ\t[^\t]+\t(%d+)\t") or "")) or
             (r.kind=="b" and (kind=="FB" or kind=="FG" or kind=="FD") and
                 Hash(packet:match("^([^\t]+\t[^\t]+\t[^\t]+)" ) or "")==r.id)
         if not allowed then return false end
+        if r.kind=="s" then
+            if not TC.DecodeDailyScore then return false end
+            local _,score=TC.DecodeDailyScore(packet)
+            if not score or score.revision~=r.revision or #packets~=1 then return false end
+        end
         if r.kind=="q" then
             local slot,value=TC.Decode(packet)
             if not slot or value.revision~=r.revision or #packets~=1 then return false end
