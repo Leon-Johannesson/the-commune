@@ -1,9 +1,21 @@
 local _, TC = ...
 local bubble, state, currentStore
+local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.39",
-    text = "Zone deaths now separate PvE and PvP; older or unreadable causes stay Unknown."
+    version = "0.4.40",
+    text = "The reminder stays hidden inside instances; /commune remains available."
 }
+local function InInstance()
+    if type(IsInInstance)=="function" then
+        local ok,inside=pcall(IsInInstance)
+        if ok and not (issecretvalue and issecretvalue(inside)) and type(inside)=="boolean" then return inside end
+    end
+    if type(GetInstanceInfo)=="function" then
+        local ok,_,kind=pcall(GetInstanceInfo)
+        if ok and not (issecretvalue and issecretvalue(kind)) and type(kind)=="string" then return kind~="" and kind~="none" end
+    end
+    return false
+end
 local function NumberOf(t)
     local count=0; for _ in pairs(t) do count=count+1 end; return count
 end
@@ -64,6 +76,8 @@ function TC.UpdateSummary()
     for key in pairs(state.unreadRequests) do if not activeRequests[key] then state.unreadRequests[key]=nil end end
     for id in pairs(state.unreadProjects) do if not activeProjects[id] then state.unreadProjects[id]=nil end end
     TC.summaryCounts={requests=requests,projects=projects,newRequests=NumberOf(state.unreadRequests),newProjects=NumberOf(state.unreadProjects)}
+    local inside=InInstance()
+    if inside and newArrival then deferredByInstance=true end
     if bubble then
         bubble.requests:SetText("Requests: "..requests); bubble.projects:SetText("Projects: "..projects)
         local parts={}
@@ -74,7 +88,10 @@ function TC.UpdateSummary()
         bubble.news:SetShown(#parts>0)
         LayoutPatchNote(#parts)
         TC.UpdateSummaryDaily()
-        if newArrival then bubble:Show() end
+        if inside then
+            if bubble:IsShown() then deferredByInstance=true end
+            bubble:Hide()
+        elseif newArrival then bubble:Show() end
     end
 end
 
@@ -86,6 +103,7 @@ function TC.UpdateSummaryDaily()
 end
 
 function TC.DismissSummary()
+    deferredByInstance=false
     if state then state.unreadRequests={}; state.unreadProjects={} end
     if bubble then bubble:Hide() end
     TC.UpdateSummary()
@@ -146,6 +164,12 @@ end
 
 function TC.ShowSummary()
     if not TC.store or not TC.guildKey then return end
+    if InInstance() then
+        deferredByInstance=true
+        TC.UpdateSummary()
+        return
+    end
+    deferredByInstance=false
     if not bubble then Build() end
     TC.UpdateSummary(); bubble:Show()
 end
@@ -153,3 +177,14 @@ end
 function TC.StartSummary()
     TC.ShowSummary()
 end
+
+local events=CreateFrame("Frame")
+events:RegisterEvent("PLAYER_ENTERING_WORLD")
+events:RegisterEvent("ZONE_CHANGED_NEW_AREA")
+events:SetScript("OnEvent",function()
+    if InInstance() then
+        if bubble and bubble:IsShown() then deferredByInstance=true; bubble:Hide() end
+    elseif deferredByInstance and TC.guildKey then
+        TC.ShowSummary()
+    end
+end)

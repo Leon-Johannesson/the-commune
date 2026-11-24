@@ -1,4 +1,10 @@
-# The Commune — 0.4.39
+# The Commune — 0.4.40
+
+## Quiet reminders inside instances (0.4.40)
+
+The login/new-post reminder stays hidden inside instances, including dungeons and raids. Entering an instance hides a reminder that was already open, and new requests or projects do not reopen it while you are inside. Unread notices remain saved and a deferred reminder can return after you leave. Logging in or reloading inside an instance follows the same rule.
+
+Only the reminder is suppressed. `/commune`, its pages and games, guild sync, and the separate death/hitlist panels continue to work normally. `/commune summary` also waits until you are outside an instance.
 
 ## PvE and PvP deaths by zone (0.4.39)
 
