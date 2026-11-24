@@ -493,8 +493,15 @@ SlashCmdList.THECOMMUNE = function(command)
     if not TC.guildKey and command~="" and command~="resize" and command~="debug" then TC.GetMainWindow():Show(); TC.Refresh(); return end
     if command=="quiz" or command=="wordle" or command=="credits" or command=="hitlist" or command=="scores" or command=="pvp" or command=="aim" then TC.OpenSocial(command); return end
     if command == "sync" then TC.Query(true); return end
-    if command == "debug" then TC.DebugSync(); return end
-    if command == "craftsdebug" then TC.ScanProfessions(); TC.DebugCrafts(); return end
+    if command == "debug" then
+        if TC.ShowReport then TC.ShowReport("The Commune - sync debug",TC.DebugSync) else TC.DebugSync() end
+        return
+    end
+    if command == "craftsdebug" then
+        TC.ScanProfessions()
+        if TC.ShowReport then TC.ShowReport("The Commune - crafts debug",TC.DebugCrafts) else TC.DebugCrafts() end
+        return
+    end
     if command == "summary" then TC.ShowSummary(); return end
     if command=="crafts" or command=="projects" or command=="requests" or command=="deaths" then
         if not window then Build() end

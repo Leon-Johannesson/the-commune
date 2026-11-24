@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.40",
-    text = "The reminder stays hidden inside instances; /commune remains available."
+    version = "0.4.41",
+    text = "/commune debug now opens a copyable window instead of filling chat."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then

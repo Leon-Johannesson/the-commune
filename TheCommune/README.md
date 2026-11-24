@@ -1,4 +1,10 @@
-# The Commune — 0.4.40
+# The Commune — 0.4.41
+
+## Copyable debug reports (0.4.41)
+
+`/commune debug` and `/commune craftsdebug` now open a movable window holding the whole report in a selectable text box instead of printing it line by line into chat. The text is selected as soon as the window opens, so Ctrl+C copies all of it; Escape or the close button dismisses it. Scroll with the wheel or the bar on the right for reports longer than the window.
+
+The report is read-only, so a stray keypress cannot change what you are about to paste. Nothing about what the reports contain has changed. If the window cannot be built for any reason, the report falls back to chat exactly as before, because a debug report is wanted most when something is already broken.
 
 ## Quiet reminders inside instances (0.4.40)
 
