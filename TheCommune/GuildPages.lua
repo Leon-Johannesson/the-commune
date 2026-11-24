@@ -1,4 +1,19 @@
 local _, TC = ...
+-- Skill-line IDs keep the decoration independent of localized profession names.
+local professionIcons={
+    [164]="Trade_BlackSmithing", [165]="Trade_LeatherWorking",
+    [171]="Trade_Alchemy", [182]="Trade_Herbalism",
+    [185]="INV_Misc_Food_15", [186]="Trade_Mining",
+    [197]="Trade_Tailoring", [202]="Trade_Engineering",
+    [129]="Spell_Holy_SealOfSacrifice", [333]="Trade_Engraving",
+    [356]="Trade_Fishing", [393]="INV_Misc_Pelt_Wolf_01",
+}
+local function ProfessionLabel(id,name)
+    local icon=professionIcons[id]
+    if not icon then return name end
+    return "|TInterface\\Icons\\"..icon..":14:14:0:0|t "..name
+end
+
 
 local function CrafterMenu(page, H, onChoose)
     local shield=CreateFrame("Button",nil,page)
@@ -167,7 +182,7 @@ function TC.BuildGuildPages(window,H)
                 crafts.professionChecks[i]=check
             end
             check.professionID=option.value
-            check.label:SetText(option.label)
+            check.label:SetText(ProfessionLabel(option.value,option.label))
             selection[option.value]=crafts.professions and crafts.professions[option.value] or nil
             check:SetChecked(selection[option.value] or false)
             check:Show()
@@ -185,13 +200,7 @@ function TC.BuildGuildPages(window,H)
     crafts.details:SetWordWrap(true); crafts.details:SetJustifyV("TOP")
     crafts.Select=function(entry)
         crafts.selected=entry.id
-        local lines={entry.name.."  |  "..entry.profession..(entry.requiredSkill and ("  |  Required skill: "..entry.requiredSkill) or "  |  Required skill unknown")}
-        local availability=TC.RecipeAvailabilityFor(entry)
-        for i=1,math.min(8,#availability) do lines[#lines+1]=availability[i].text end
-        if #availability>8 then lines[#lines+1]="More members listed in the recipe tooltip." end
-        if #availability==0 then lines[#lines+1]="No guild profession data for this recipe yet." end
-        if entry.source and entry.source~="" then lines[#lines+1]="Source: "..entry.source end
-        crafts.details:SetText(table.concat(lines,"\n"))
+
     end
     crafts.Update=function()
         if window.activePage~="crafts" then return end
@@ -208,7 +217,7 @@ function TC.BuildGuildPages(window,H)
         local query=crafts.search:GetText()
         local data=TC.RecipeRows(query,crafts.crafter==true,crafts.professions,owner)
         Fill(crafts,data,function(row,entry)
-            row.icon:SetTexture(entry.icon); row.a:SetText(entry.name); row.b:SetText(entry.profession)
+            row.icon:SetTexture(entry.icon); row.a:SetText(entry.name); row.b:SetText(ProfessionLabel(entry.meta and entry.meta.profession,entry.profession))
             local availability=not entry.craftable and TC.RecipeAvailabilityFor(entry) or nil
             row.c:SetText(entry.craftable and table.concat(entry.crafters,", ") or
                 (availability[1] and availability[1].short or "No confirmed crafter"))
@@ -219,7 +228,7 @@ function TC.BuildGuildPages(window,H)
         if #data==0 then
             crafts.details:SetText((query~="" or crafts.professions or crafts.crafter) and
                 "No matching recipes." or "Open your profession and click Scan professions.")
-        elseif not crafts.selected then crafts.details:SetText("") end
+        else crafts.details:SetText("") end
     end
     crafts.Layout=function()
         local w,h=window:GetWidth(),window:GetHeight(); local content=w-48
@@ -246,7 +255,8 @@ function TC.BuildGuildPages(window,H)
         local rowW=content-18
         Place(crafts.headers[1],54,-160-gridHeight,recipeW-36); Place(crafts.headers[2],24+recipeW,-160-gridHeight,professionW-10)
         Place(crafts.headers[3],24+recipeW+professionW,-160-gridHeight,rowW-recipeW-professionW)
-        crafts.visible=math.max(1,math.floor((h-225-rowTop)/30))
+        -- Keep only a compact footer; recipe details live in the row tooltip.
+        crafts.visible=math.max(1,math.floor((h-44-rowTop)/30))
         for i=1,crafts.visible do
             if not crafts.rows[i] then crafts.rows[i]=Row(crafts,i) end
             local row=crafts.rows[i]; Place(row,24,-rowTop-(i-1)*30,rowW,30)
@@ -262,8 +272,8 @@ function TC.BuildGuildPages(window,H)
             end)
         end
         Place(crafts.scrollBar,24+rowW+6,-rowTop,12,crafts.visible*30-4)
-        Place(crafts.count,24,-h+213,content)
-        Place(crafts.details,24,-h+186,content,148)
+        Place(crafts.count,24,-h+28,120)
+        Place(crafts.details,156,-h+28,content-132,20)
         crafts.details:SetFontObject("GameFontHighlightSmall")
     end
 

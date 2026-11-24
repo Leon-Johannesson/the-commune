@@ -1,8 +1,8 @@
 local _, TC = ...
 local bubble, state, currentStore
 local latestUpdate = {
-    version = "0.4.34",
-    text = "Five daily questions from WoW, other games, and general trivia."
+    version = "0.4.36",
+    text = "Guildmates now share saved player information even while its owner is offline."
 }
 local function NumberOf(t)
     local count=0; for _ in pairs(t) do count=count+1 end; return count

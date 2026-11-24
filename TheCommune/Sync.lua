@@ -4,10 +4,10 @@ local function NewQueue()
     return {head = 1, tail = 0}
 end
 
-local queue, craftQueue, pending = NewQueue(), NewQueue(), {}
+local queue, craftQueue, relayDataQueue, relayQueue, pending = NewQueue(), NewQueue(), NewQueue(), NewQueue(), {}
 
 local function QueueLength()
-    return queue.tail - queue.head + craftQueue.tail - craftQueue.head + 2
+    return queue.tail - queue.head + craftQueue.tail - craftQueue.head + relayDataQueue.tail - relayDataQueue.head + relayQueue.tail - relayQueue.head + 4
 end
 local lastQuery, lastReply = -100, -100
 local peerSeen=false
@@ -44,6 +44,7 @@ function TC.DebugSync()
     TC.Print("Last send: " .. stats.lastSend .. " | last peer: " .. (stats.peer or "none"))
     TC.Print("Send spacing: "..string.format("%.1f",sendInterval).."s | throttles: "..stats.throttled.." | guild addon peer: "..tostring(peerSeen))
     TC.Print(TC.syncStatus)
+    if TC.DebugCacheSync then TC.DebugCacheSync() end
     if TC.DebugTracking then TC.DebugTracking() end
     if TC.DebugHits then TC.DebugHits() end
     if TC.DebugCredits then TC.DebugCredits() end
@@ -83,13 +84,17 @@ end
 local function Enqueue(key, message)
     if not TC.guildKey then return end
     if not pending[key] then
-        local target = key:sub(1,5)=="craft" and craftQueue or queue
+        local target = key:sub(1,11)=="relay:data:" and relayDataQueue or key:sub(1,6)=="relay:" and relayQueue or key:sub(1,5)=="craft" and craftQueue or queue
         target.tail = target.tail + 1
         target[target.tail] = key
     end
     pending[key] = message
 end
 TC.QueueGuildPacket = Enqueue
+function TC.CancelGuildPacket(key) pending[key]=nil end
+function TC.CancelGuildPackets(prefix)
+    for key in pairs(pending) do if key:sub(1,#prefix)==prefix then pending[key]=nil end end
+end
 
 function TC.BroadcastSlot(slot)
     local r=TC.store.owners[TC.owner][slot]
@@ -127,15 +132,17 @@ function TC.Query(manual, lightweight)
     else
         TC.BroadcastAll()
     end
+    if not lightweight and TC.QueryCache then TC.QueryCache() end
     SetStatus("Guild sync queued; waiting for responses")
     if manual then TC.Print("Guild sync queued. Allow a few seconds; /commune debug shows delivery details.") end
     return true
 end
 
 function TC.ResetSync()
-    queue, craftQueue, pending = NewQueue(), NewQueue(), {}
+    queue, craftQueue, relayDataQueue, relayQueue, pending = NewQueue(), NewQueue(), NewQueue(), NewQueue(), {}
     lastQuery, lastReply = -100, -100
     retryAt, retryDelay = 0, 2
+    if TC.ResetCacheSync then TC.ResetCacheSync() end
     peerSeen=false; sendInterval=1; lastThrottle=-1000; lastWarning=-1000
     TC.syncStatus = TC.guildKey and "Guild sharing ready" or "Personal board (no guild)"
     C_Timer.After(3, TC.Query)
@@ -149,6 +156,7 @@ function TC.Receive(prefix, message, channel, sender)
     peerSeen=true
     stats.received = stats.received + 1
     stats.peer = sender
+    if TC.ReceiveCacheSync and TC.ReceiveCacheSync(message,sender) then return end
     if message == "Q\t1" then
         SetStatus("Sync query received from " .. TC.DisplayName(sender))
         if GetTime() - lastReply > 30 then
@@ -168,6 +176,11 @@ function TC.Receive(prefix, message, channel, sender)
     if TC.ReceiveGuildData and TC.ReceiveGuildData(message, sender) then return end
     local slot, r = TC.Decode(message)
     if not slot then stats.rejected = stats.rejected + 1; return end
+    TC.ApplyRequest(slot,r,sender)
+end
+
+-- Shared by direct updates and validated cache transfers.
+function TC.ApplyRequest(slot,r,sender)
     TC.store.owners[sender] = TC.store.owners[sender] or {}
     local previous = TC.store.owners[sender][slot]
     if not previous or r.revision > previous.revision or (r.revision==previous.revision and r.createdKnown and
@@ -210,7 +223,12 @@ function TC.StartSync()
         -- The general restriction flag is advisory: let the GUILD API's actual
         -- result decide whether this message is permitted. Do not change channels.
         -- Requests/projects should not wait behind a large recipe scan.
-        local target = queue.head <= queue.tail and queue or craftQueue
+        local target = queue.head <= queue.tail and queue or craftQueue.head <= craftQueue.tail and craftQueue or relayDataQueue.head <= relayDataQueue.tail and relayDataQueue or relayQueue
+        -- Cancelled duplicate offers are discarded without consuming a send slot.
+        while target.head<=target.tail and not pending[target[target.head]] do
+            target[target.head]=nil; target.head=target.head+1
+        end
+        if target.head>target.tail then target.head,target.tail=1,0; return end
         local key = target[target.head]
         local ok, result = pcall(C_ChatInfo.SendAddonMessage, PREFIX, pending[key], "GUILD")
         -- Modern clients return an enum; older builds may return nil or boolean.
@@ -228,6 +246,7 @@ function TC.StartSync()
                 target.head = target.head + 1
             end
             stats.sent = stats.sent + 1
+            if TC.CachePacketSent and key:sub(1,6)=="relay:" then TC.CachePacketSent(key) end
             retryAt, retryDelay = 0, 2
             if GetTime()-lastThrottle>60 then sendInterval=math.max(1,sendInterval-0.1) end
             if recovering then SetStatus(QueueLength()>0 and "Sharing queued guild updates" or "Guild updates sent")

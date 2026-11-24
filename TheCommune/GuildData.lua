@@ -122,13 +122,20 @@ local function EncodeRecipes(recipes)
     return chunks
 end
 
-local function BroadcastProfession(id, profession)
+function TC.ProfessionPackets(id, profession)
+    local packets={}
     local chunks = EncodeRecipes(profession.recipes)
-    TC.QueueGuildPacket("craft-head:" .. id, table.concat({"CB", id, profession.revision, #chunks,
-        TC.Clean(profession.name, 48), profession.rank, profession.maxRank}, "\t"))
+    packets[1]=table.concat({"CB", id, profession.revision, #chunks,
+        TC.Clean(profession.name, 48), profession.rank, profession.maxRank}, "\t")
     for index, chunk in ipairs(chunks) do
-        TC.QueueGuildPacket("craft:" .. id .. ":" .. index,
-            table.concat({"CC", id, profession.revision, index, chunk}, "\t"))
+        packets[#packets+1]=table.concat({"CC", id, profession.revision, index, chunk}, "\t")
+    end
+    return packets
+end
+local function BroadcastProfession(id,profession)
+    for index,packet in ipairs(TC.ProfessionPackets(id,profession)) do
+        local key=index==1 and ("craft-head:"..id) or ("craft:"..id..":"..(index-1))
+        TC.QueueGuildPacket(key,packet)
     end
 end
 
