@@ -1,4 +1,10 @@
-# The Commune — 0.4.41
+# The Commune — 0.4.42
+
+## Even-level guild announcements (0.4.42)
+
+Gaining an even level now posts a single guild-chat message, for example: [The Commune] Ding! I just reached level 20! This applies to every even level your character gains while running the addon. Only the leveling player's client announces it, so other guildmates running The Commune do not repeat the message.
+
+Logging in, installing, or reloading does not announce your existing level or replay earlier milestones. Duplicate events are ignored per character, and levels gained outside a guild are not announced later when joining one. If the client rejects a send, it is not repeatedly retried. Other guild sharing remains on the hidden addon channel.
 
 ## Copyable debug reports (0.4.41)
 

@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.41",
-    text = "/commune debug now opens a copyable window instead of filling chat."
+    version = "0.4.42",
+    text = "Even-level gains now get a single announcement in guild chat."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then
