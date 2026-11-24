@@ -60,6 +60,8 @@ function TC.MergeEmptyRealmGuild(guild,key)
             end
         end
     end
+    local retainedZones={}
+    for owner,p in pairs(target.social and target.social.pvp or {}) do retainedZones[owner]=Copy(p.deathZones) end
     if old then Merge(target,old) end
     if next(profiles) then target.social=target.social or {}; target.social.accounts=profiles end
     for owner,p in pairs(old and old.social and old.social.pvp or {}) do
@@ -71,6 +73,11 @@ function TC.MergeEmptyRealmGuild(guild,key)
             current.deaths=math.max(current.deaths or 0,p.deaths); current.deathsLifetime=current.deathsLifetime or p.deathsLifetime
             current.deathRevision=math.max(current.deathRevision or 0,p.deathRevision or 0)
         end
+    end
+    -- A legacy profile can have a newer overall revision without carrying the
+    -- independent cause counters already held in the destination guild store.
+    for owner,zones in pairs(retainedZones) do
+        if TC.MergeDeathZones then TC.MergeDeathZones(target.social.pvp[owner],zones) end
     end
     if oldWallet then
         local wallet=fun.wallets[key]

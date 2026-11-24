@@ -1,4 +1,12 @@
-# The Commune — 0.4.38
+# The Commune — 0.4.39
+
+## PvE and PvP deaths by zone (0.4.39)
+
+The Deaths page now separates each guild character's PvE, PvP, Unknown, and Total counts for your current zone. The small movable panel shows PvE, PvP, and ? columns; hovering a row explains the counts and shows the total. Its position, dismissal, and enable/disable preference are retained.
+
+New deaths are classified when a fresh, readable death recap identifies the fatal source: players count as PvP, observed player-controlled pets or guardians count as PvP, and confirmed NPC or environmental/self deaths count as PvE. An enemy target, a PvP flag, or being in a battleground is not enough on its own. If the client hides the source, the recap is unavailable, or a pet/vehicle's control cannot be established, the death stays Unknown. The zone is captured at death before releasing to a graveyard. Classification can fill in shortly afterward without increasing the total again.
+
+Previously saved zone deaths have no cause information and remain in Unknown. Totals are preserved, including guildmates on older versions. The split starts with this update and shares through the usual guild sync and offline cache paths; guildmates need 0.4.39 to exchange cause details. Missing details from an older peer never erase a split already received.
 
 ## Shared daily quiz results and saved scores (0.4.38)
 

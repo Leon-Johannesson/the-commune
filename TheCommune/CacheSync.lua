@@ -5,7 +5,7 @@ local incoming,outgoing,lastQuery={}, {}, -100
 local serial=0
 local sharedSnapshot
 local MAX_RECORDS,MAX_PARTS,FRAGMENT=4096,512,160
-local kinds={q=true,l=true,c=true,g=true,p=true,h=true,d=true,z=true,a=true,b=true,w=true,s=true}
+local kinds={q=true,l=true,c=true,g=true,p=true,h=true,d=true,z=true,a=true,b=true,w=true,s=true,v=true}
 local function Owner(owner)
     return type(owner)=="string" and #owner<=100 and not owner:find("[%c]") and TC.NormalizeName(owner)==owner
 end
@@ -105,6 +105,8 @@ local function RecordsFor(owner,emit)
         for _,zone in ipairs(SortedKeys(p.deathZones)) do
             local entry=p.deathZones[zone]
             emit(Record(owner,"z",Hash(zone),entry.revision,{Packet("PZ",zone,entry.revision,entry.count,entry.name)}))
+            local typed=TC.DeathZoneTypePacket and TC.DeathZoneTypePacket(zone,entry)
+            if typed then emit(Record(owner,"v",Hash(zone),entry.typeRevision,{typed})) end
         end
     end
     local account=social.characters and social.characters[owner]
@@ -244,11 +246,16 @@ local function Apply(r,packets)
             (r.kind=="l" and kind=="CL") or (r.kind=="c" and (kind=="CB" or kind=="CC") and id==r.id) or
             (r.kind=="g" and kind=="GG") or (r.kind=="p" and (kind=="PK" or kind=="PL")) or
             (r.kind=="h" and kind=="PH") or (r.kind=="d" and kind=="PT") or (r.kind=="z" and kind=="PZ" and Hash(id or "")==r.id) or
+            (r.kind=="v" and kind=="PY" and Hash(id or "")==r.id) or
             (r.kind=="a" and kind=="FA" and id==r.id) or (r.kind=="w" and kind=="FW" and id==r.id) or
             (r.kind=="s" and kind=="FQ" and r.id==(id or "")..":"..(packet:match("^FQ\t[^\t]+\t(%d+)\t") or "")) or
             (r.kind=="b" and (kind=="FB" or kind=="FG" or kind=="FD") and
                 Hash(packet:match("^([^\t]+\t[^\t]+\t[^\t]+)" ) or "")==r.id)
         if not allowed then return false end
+        if r.kind=="v" then
+            local revision=TC.Integer(packet:match("^PY\t[^\t]+\t(%d+)\t"),1,time()+86400)
+            if revision~=r.revision or #packets~=1 then return false end
+        end
         if r.kind=="s" then
             if not TC.DecodeDailyScore then return false end
             local _,score=TC.DecodeDailyScore(packet)

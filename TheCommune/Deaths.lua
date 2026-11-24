@@ -55,17 +55,18 @@ function TC.ZoneDeathRows()
     local rows,total={},0
     local profiles=TC.store and TC.store.social and TC.store.social.pvp or {}
     for owner,profile in pairs(profiles) do
-        local count=0
+        local count,pve,pvp=0,0,0
         for zone,entry in pairs(profile.deathZones or {}) do
             -- A client without map data records the zone's name instead. Keep
             -- those observations visible without merging distinct map/instance IDs.
             if zone==key or (key~="unknown" and entry.name==name and
                 (zone:sub(1,5)=="name:" or key:sub(1,5)=="name:")) then
                 count=count+(TC.Integer(entry.count,1,999999999) or 0)
+                pve=pve+(entry.pve or 0); pvp=pvp+(entry.pvp or 0)
             end
         end
         if count>0 then
-            rows[#rows+1]={owner=owner,name=TC.DisplayName(owner),count=count}
+            rows[#rows+1]={owner=owner,name=TC.DisplayName(owner),count=count,pve=pve,pvp=pvp,unknown=math.max(0,count-pve-pvp)}
             total=total+count
         end
     end
@@ -80,10 +81,21 @@ end
 local function SaveZone(profile,key,entry)
     profile.deathZones=profile.deathZones or {}
     local previous=profile.deathZones[key]
-    if not previous or (entry.revision>=previous.revision and entry.count>=previous.count and
-        (entry.revision>previous.revision or entry.count>previous.count)) then
-        profile.deathZones[key]=entry
+    local newer=not previous or (entry.revision>=previous.revision and entry.count>=previous.count and
+        (entry.revision>previous.revision or entry.count>previous.count))
+    local typed=entry.typeRevision and (not previous or entry.typeRevision>(previous.typeRevision or 0)) and
+        entry.typeCount<=(newer and entry.count or previous.count) and
+        entry.pve>=(previous and previous.pve or 0) and entry.pvp>=(previous and previous.pvp or 0)
+    if not newer and not typed then return end
+    local merged={name=newer and entry.name or previous.name,count=newer and entry.count or previous.count,
+        revision=newer and entry.revision or previous.revision}
+    local types=typed and entry or previous
+    if types and types.typeRevision then
+        merged.pve,merged.pvp=types.pve,types.pvp
+        merged.typeRevision,merged.typeCount=types.typeRevision,types.typeCount
     end
+    profile.deathZones[key]=merged
+    return true
 end
 
 function TC.MergeDeathZones(profile,zones)
@@ -92,6 +104,14 @@ end
 
 local function BroadcastZone(key,entry)
     TC.QueueGuildPacket("death-zone:"..key,table.concat({"PZ",key,entry.revision,entry.count,entry.name},"\t"))
+    local typed=TC.DeathZoneTypePacket(key,entry)
+    if typed then TC.QueueGuildPacket("death-zone-type:"..key,typed) end
+end
+
+function TC.DeathZoneTypePacket(key,entry)
+    if entry.typeRevision then
+        return table.concat({"PY",key,entry.typeRevision,entry.typeCount,entry.pve,entry.pvp,entry.name},"\t")
+    end
 end
 
 function TC.BroadcastDeathZones()
@@ -107,8 +127,21 @@ local function RecordDeathZone(profile)
     profile.deathZones=profile.deathZones or {}
     local old=profile.deathZones[key]
     local entry={name=name,count=(old and old.count or 0)+1,revision=math.max(time(),(old and old.revision or 0)+1)}
+    entry.pve,entry.pvp=old and old.pve or 0,old and old.pvp or 0
+    entry.typeRevision,entry.typeCount=entry.revision,entry.count
     profile.deathZones[key]=entry
     if TC.guildKey then BroadcastZone(key,entry) end
+    if TC.RefreshZoneDeaths then TC.RefreshZoneDeaths() end
+    if TC.ClassifyZoneDeath then TC.ClassifyZoneDeath(profile,key) end
+end
+
+function TC.RecordZoneDeathCause(profile,key,cause,store)
+    local entry=profile.deathZones and profile.deathZones[key]
+    if not entry or (cause~="pve" and cause~="pvp") or (entry.pve or 0)+(entry.pvp or 0)>=entry.count then return end
+    entry[cause]=(entry[cause] or 0)+1
+    entry.revision=math.max(time(),entry.revision+1)
+    entry.typeRevision,entry.typeCount=entry.revision,entry.count
+    if TC.guildKey and TC.store==store then BroadcastZone(key,entry) end
     if TC.RefreshZoneDeaths then TC.RefreshZoneDeaths() end
 end
 
@@ -121,17 +154,26 @@ end
 local function ReceiveZone(message,sender)
     if #message>254 then return end
     local key,revision,count,name=message:match("^PZ\t([^\t]+)\t(%d+)\t(%d+)\t([^\t]+)$")
+    local pve,pvp
+    local typed=message:sub(1,3)=="PY\t"
+    if typed then
+        key,revision,count,pve,pvp,name=message:match("^PY\t([^\t]+)\t(%d+)\t(%d+)\t(%d+)\t(%d+)\t([^\t]+)$")
+        pve,pvp=TC.Integer(pve,0,999999999),TC.Integer(pvp,0,999999999)
+    end
     revision=TC.Integer(revision,1,time()+86400)
     count=TC.Integer(count,1,999999999)
     name=ZoneName(name)
     if not revision or not count or name=="" or not key or #key>85 then return end
+    if typed and (not pve or not pvp or pve+pvp>count) then return end
     if key=="unknown" then
         name="Unknown zone"
     elseif key~="name:"..name then
         local kind,id=key:match("^(%l+):([1-9]%d*)$")
         if (kind~="map" and kind~="instance") or not TC.Integer(id,1,2147483647) then return end
     end
-    SaveZone(DeathProfile(sender),key,{name=name,count=count,revision=revision})
+    local entry={name=name,count=count,revision=revision}
+    if typed then entry.pve,entry.pvp,entry.typeRevision,entry.typeCount=pve,pvp,revision,count end
+    SaveZone(DeathProfile(sender),key,entry)
     if TC.RefreshZoneDeaths then TC.RefreshZoneDeaths() end
 end
 
@@ -162,7 +204,7 @@ function TC.BroadcastDeaths(p)
 end
 function TC.ReceiveDeaths(message,sender)
     local kind=message:sub(1,3)
-    if kind=="PZ\t" then ReceiveZone(message,sender); return true end
+    if kind=="PZ\t" or kind=="PY\t" then ReceiveZone(message,sender); return true end
     if kind~="PT\t" then return false end
     local revision,count,source=message:match("^PT\t(%d+)\t(%d+)\t([01])$")
     revision=TC.Integer(revision,0,time()+86400); count=TC.Integer(count,0,999999999)

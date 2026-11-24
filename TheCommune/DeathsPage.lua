@@ -24,6 +24,8 @@ local function RowTooltip(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     GameTooltip:SetText(PlayerLabel(self.entry))
     GameTooltip:AddLine(self.entry.count .. " recorded deaths in " .. self.zone, 0.82, 0.77, 0.66, true)
+    GameTooltip:AddLine("PvE: " .. self.entry.pve .. "  |  PvP: " .. self.entry.pvp, 0.82, 0.77, 0.66)
+    GameTooltip:AddLine("Unknown: " .. self.entry.unknown .. " (older or unreadable causes)", 0.6, 0.6, 0.6, true)
     GameTooltip:Show()
 end
 
@@ -34,6 +36,12 @@ local function Row(parent, index, onScroll)
     row.name = Label(row, "")
     row.count = Label(row, "")
     row.count:SetJustifyH("RIGHT")
+    for _, key in ipairs({"pve", "pvp", "unknown"}) do
+        row[key] = Label(row, ""); row[key]:SetJustifyH("RIGHT")
+    end
+    row.pve:SetTextColor(0.58, 0.76, 0.86)
+    row.pvp:SetTextColor(0.88, 0.62, 0.58)
+    row.unknown:SetTextColor(0.6, 0.6, 0.6)
     row:EnableMouse(true); row:EnableMouseWheel(true)
     row:SetScript("OnMouseWheel", onScroll)
     row:SetScript("OnEnter", RowTooltip)
@@ -50,6 +58,12 @@ local function Fill(rows, widgets, visible, offset, zone)
         if entry then
             widget.name:SetText(PlayerLabel(entry))
             widget.count:SetText(entry.count)
+            for _,key in ipairs({"pve","pvp","unknown"}) do
+                local value=entry[key]
+                local text=widget.compact and value>=1000000 and (math.floor(value/1000000).."m") or
+                    widget.compact and value>=10000 and (math.floor(value/1000).."k") or value
+                widget[key]:SetText(text)
+            end
         end
     end
     return offset
@@ -57,17 +71,21 @@ end
 
 local function BuildPanel()
     panel = CreateFrame("Frame", "TheCommuneZoneDeaths", UIParent, "BackdropTemplate")
-    panel:SetSize(238, 110)
+    panel:SetSize(282, 110)
     panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 24, -300)
     panel:SetFrameStrata("MEDIUM")
     panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=12})
     TC.StyleWindow(panel)
     TC.RememberWindow(panel, "zoneDeaths", nil, true)
     panel.title = Label(panel, "")
-    panel.title:SetPoint("TOPLEFT", 12, -12); panel.title:SetWidth(192)
+    panel.title:SetPoint("TOPLEFT", 12, -12); panel.title:SetWidth(236)
     panel.title:SetTextColor(0.65, 0.72, 0.67)
     panel.hint = Label(panel, "", "GameFontDisableSmall")
-    panel.hint:SetPoint("BOTTOMLEFT", 12, 10); panel.hint:SetWidth(214)
+    panel.hint:SetPoint("BOTTOMLEFT", 12, 10); panel.hint:SetWidth(258)
+    for i, title in ipairs({"PvE", "PvP", "?"}) do
+        local header=Label(panel,title,"GameFontDisableSmall")
+        header:SetPoint("TOPLEFT",150+(i-1)*40,-32); header:SetWidth(36); header:SetJustifyH("RIGHT")
+    end
     panel.rows = {}
     local function Scroll(_, delta)
         panelOffset = panelOffset - delta
@@ -76,9 +94,13 @@ local function BuildPanel()
     panel:EnableMouseWheel(true); panel:SetScript("OnMouseWheel", Scroll)
     for i = 1, panelLimit do
         local row = Row(panel, i, Scroll)
-        row:SetPoint("TOPLEFT", 12, -34 - (i - 1) * 20); row:SetSize(214, 20)
-        row.name:SetPoint("TOPLEFT", 3, -3); row.name:SetWidth(140)
-        row.count:SetPoint("TOPRIGHT", -3, -3); row.count:SetWidth(60)
+        row.compact=true
+        row:SetPoint("TOPLEFT", 12, -49 - (i - 1) * 20); row:SetSize(258, 20)
+        row.name:SetPoint("TOPLEFT", 3, -3); row.name:SetWidth(130)
+        row.count:Hide()
+        for column,key in ipairs({"pve","pvp","unknown"}) do
+            row[key]:SetPoint("TOPLEFT",138+(column-1)*40,-3); row[key]:SetWidth(36)
+        end
         panel.rows[i] = row
     end
     local close = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
@@ -121,7 +143,7 @@ function TC.RefreshZoneDeaths()
     panel.title:SetText("Deaths  |  " .. name)
     panelOffset = Fill(rows, panel.rows, panelLimit, panelOffset, name)
     local visible = math.min(panelLimit, #rows)
-    panel:SetHeight(62 + visible * 20)
+    panel:SetHeight(77 + visible * 20)
     panel.hint:SetText(#rows > panelLimit and
         ((panelOffset + 1) .. "-" .. (panelOffset + visible) .. " of " .. #rows .. " guildmates  |  Scroll") or
         (total .. " recorded death" .. (total == 1 and "" or "s")))
@@ -136,11 +158,14 @@ function TC.BuildDeathsPage(window, H)
     page.title:SetFontObject("GameFontHighlightLarge")
     page.summary = H.Label(page, "", 0, 0)
     page.summary:SetFontObject("GameFontHighlightSmall")
-    page.headers = {H.Label(page, "GUILD MEMBER", 0, 0), H.Label(page, "DEATHS", 0, 0)}
-    page.headers[2]:SetJustifyH("RIGHT")
+    page.headers = {H.Label(page, "GUILD MEMBER", 0, 0)}
+    for _,title in ipairs({"PvE","PvP","UNKNOWN","TOTAL"}) do
+        local header=H.Label(page,title,0,0); header:SetJustifyH("RIGHT")
+        page.headers[#page.headers+1]=header
+    end
     page.empty = H.Label(page, "No shared deaths recorded in this zone yet.", 0, 0)
     page.empty:SetFontObject("GameFontDisableSmall")
-    page.note = H.Label(page, "All causes. Zone counts recorded since v0.4.35; shared addon data.", 0, 0)
+    page.note = H.Label(page, "PvE/PvP tracked since v0.4.39. Unknown includes older or unreadable causes.", 0, 0)
     page.note:SetFontObject("GameFontDisableSmall")
     page.showPanel = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
     page.panelLabel = H.Label(page, "Show zone panel while playing", 0, 0)
@@ -163,16 +188,19 @@ function TC.BuildDeathsPage(window, H)
         local content = width - 48
         H.Place(page.title, 24, -114, content, 24)
         H.Place(page.summary, 24, -146, content, 18)
-        H.Place(page.headers[1], 32, -182, content - 120, 18)
-        H.Place(page.headers[2], width - 130, -182, 80, 18)
-        page.visible = math.max(1, math.floor((height - 292) / 30))
         local rowWidth = content - 18
+        local numberX = rowWidth - 320
+        H.Place(page.headers[1], 32, -182, numberX - 16, 18)
+        for column=1,4 do H.Place(page.headers[column+1],24+numberX+(column-1)*80,-182,72,18) end
+        page.visible = math.max(1, math.floor((height - 292) / 30))
         for i = 1, page.visible do
             if not page.rows[i] then page.rows[i] = Row(page, i, Scroll) end
             local row = page.rows[i]
             H.Place(row, 24, -206 - (i - 1) * 30, rowWidth, 30)
-            H.Place(row.name, 8, -8, rowWidth - 106, 18)
-            H.Place(row.count, rowWidth - 90, -8, 80, 18)
+            H.Place(row.name, 8, -8, numberX - 16, 18)
+            for column,key in ipairs({"pve","pvp","unknown","count"}) do
+                H.Place(row[key],numberX+(column-1)*80,-8,72,18)
+            end
         end
         H.Place(page.scrollBar, width - 36, -206, 12, page.visible * 30 - 4)
         H.Place(page.empty, 32, -220, content - 16, 20)
