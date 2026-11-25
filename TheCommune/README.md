@@ -1,4 +1,10 @@
-# The Commune — 0.4.43
+# The Commune — 0.4.44
+
+## Compact zone death panel (0.4.44)
+
+The movable zone death panel now uses a narrower frame, tighter rows and just the zone name in its title. The repeated total footer is removed; hover a player for their total and full breakdown. A scroll hint appears only when more than five guildmates have deaths in the zone.
+
+The former question-mark column is labeled Unk. Hover the column headings for an explanation: unknown deaths include records from before the PvE/PvP split and deaths whose cause the client could not reliably identify. Existing totals and classification are unchanged. The full Deaths page remains available in /commune.
 
 ## Safer offline cache sharing (0.4.43)
 

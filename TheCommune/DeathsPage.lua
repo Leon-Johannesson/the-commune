@@ -71,21 +71,31 @@ end
 
 local function BuildPanel()
     panel = CreateFrame("Frame", "TheCommuneZoneDeaths", UIParent, "BackdropTemplate")
-    panel:SetSize(282, 110)
+    panel:SetSize(252, 85)
     panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 24, -300)
     panel:SetFrameStrata("MEDIUM")
     panel:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=12})
     TC.StyleWindow(panel)
     TC.RememberWindow(panel, "zoneDeaths", nil, true)
     panel.title = Label(panel, "")
-    panel.title:SetPoint("TOPLEFT", 12, -12); panel.title:SetWidth(236)
+    panel.title:SetPoint("TOPLEFT", 10, -9); panel.title:SetWidth(210)
     panel.title:SetTextColor(0.65, 0.72, 0.67)
     panel.hint = Label(panel, "", "GameFontDisableSmall")
-    panel.hint:SetPoint("BOTTOMLEFT", 12, 10); panel.hint:SetWidth(258)
-    for i, title in ipairs({"PvE", "PvP", "?"}) do
+    panel.hint:SetPoint("BOTTOMLEFT", 10, 8); panel.hint:SetWidth(232)
+    for i, title in ipairs({"PvE", "PvP", "Unk"}) do
         local header=Label(panel,title,"GameFontDisableSmall")
-        header:SetPoint("TOPLEFT",150+(i-1)*40,-32); header:SetWidth(36); header:SetJustifyH("RIGHT")
+        header:SetPoint("TOPLEFT",132+(i-1)*34,-26); header:SetWidth(32); header:SetJustifyH("RIGHT")
     end
+    local help = CreateFrame("Frame", nil, panel)
+    help:SetPoint("TOPLEFT", 130, -25); help:SetSize(104, 15); help:EnableMouse(true)
+    help:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Zone deaths")
+        GameTooltip:AddLine("PvE: creatures or environmental damage. PvP: players or player-controlled units.", 0.82, 0.77, 0.66, true)
+        GameTooltip:AddLine("Unk: older deaths or causes the client could not reliably identify. These remain in the total.", 0.6, 0.6, 0.6, true)
+        GameTooltip:Show()
+    end)
+    help:SetScript("OnLeave", function() GameTooltip:Hide() end)
     panel.rows = {}
     local function Scroll(_, delta)
         panelOffset = panelOffset - delta
@@ -95,15 +105,16 @@ local function BuildPanel()
     for i = 1, panelLimit do
         local row = Row(panel, i, Scroll)
         row.compact=true
-        row:SetPoint("TOPLEFT", 12, -49 - (i - 1) * 20); row:SetSize(258, 20)
-        row.name:SetPoint("TOPLEFT", 3, -3); row.name:SetWidth(130)
+        row:SetPoint("TOPLEFT", 10, -41 - (i - 1) * 18); row:SetSize(232, 18)
+        row.name:SetPoint("TOPLEFT", 3, -3); row.name:SetWidth(114)
         row.count:Hide()
         for column,key in ipairs({"pve","pvp","unknown"}) do
-            row[key]:SetPoint("TOPLEFT",138+(column-1)*40,-3); row[key]:SetWidth(36)
+            row[key]:SetPoint("TOPLEFT",122+(column-1)*34,-3); row[key]:SetWidth(32)
         end
         panel.rows[i] = row
     end
     local close = CreateFrame("Button", nil, panel, "UIPanelCloseButton")
+    close:SetSize(24, 24)
     close:SetPoint("TOPRIGHT", 0, 0)
     close:SetScript("OnClick", function()
         dismissedZone = panelZone
@@ -140,13 +151,14 @@ function TC.RefreshZoneDeaths()
         return
     end
     if not panel then BuildPanel() end
-    panel.title:SetText("Deaths  |  " .. name)
+    panel.title:SetText(name)
     panelOffset = Fill(rows, panel.rows, panelLimit, panelOffset, name)
     local visible = math.min(panelLimit, #rows)
-    panel:SetHeight(77 + visible * 20)
+    panel:SetHeight(49 + visible * 18 + (#rows > panelLimit and 16 or 0))
     panel.hint:SetText(#rows > panelLimit and
         ((panelOffset + 1) .. "-" .. (panelOffset + visible) .. " of " .. #rows .. " guildmates  |  Scroll") or
-        (total .. " recorded death" .. (total == 1 and "" or "s")))
+        "")
+    panel.hint:SetShown(#rows > panelLimit)
     panel:Show()
 end
 
