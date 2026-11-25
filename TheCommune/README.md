@@ -1,4 +1,8 @@
-# The Commune — 0.4.47
+# The Commune — 0.4.48
+
+## Solid, consistently layered windows (0.4.48)
+
+Addon window backgrounds are now opaque. Independent windows use separated frame levels so labels and buttons from a window underneath cannot draw through one above it. Opening a window or clicking its background brings its whole frame group forward within its normal strata. Menus and embedded panels keep their parent-controlled layering. Saved positions and gameplay data are unchanged.
 
 ## Manage requests across your characters (0.4.47)
 

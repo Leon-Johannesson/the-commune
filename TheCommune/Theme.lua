@@ -24,7 +24,23 @@ function TC.StyleEdit(box)
     box:SetFontObject("GameFontHighlight"); box:SetTextColor(0.20,0.16,0.11,1)
     box:SetTextInsets(8,8,4,4); box.communeTheme="ledger"
 end
+local windows={}
+local function FrontWindow(frame)
+    for i,window in ipairs(windows) do
+        if window==frame then table.remove(windows,i); break end
+    end
+    windows[#windows+1]=frame
+    -- Separate root frames by more than their child controls' offsets, so a
+    -- lower window's labels cannot draw over the upper window's background.
+    for i,window in ipairs(windows) do window:SetFrameLevel(i*100) end
+end
 function TC.StyleWindow(frame)
-    frame:SetBackdropColor(0.12,0.11,0.09,0.94)
+    frame:SetBackdropColor(0.12,0.11,0.09,1)
     frame:SetBackdropBorderColor(0.45,0.40,0.31,1)
+    if frame:GetParent()==UIParent and not frame.communeWindowStacked then
+        frame.communeWindowStacked=true
+        FrontWindow(frame)
+        frame:HookScript("OnShow",FrontWindow)
+        frame:HookScript("OnMouseDown",FrontWindow)
+    end
 end
