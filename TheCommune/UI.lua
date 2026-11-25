@@ -426,6 +426,11 @@ local function Build()
         local id=TC.Integer(link:match("item:(%d+)"),1,2147483647)
         if id then TC.LearnItem(id); fields.item:SetText(tostring(id)) end
     end
+    -- Modern auction interfaces call this table API without invoking either
+    -- legacy global below. Secure post-hooks leave the client's return intact.
+    if ChatFrameUtil and type(ChatFrameUtil.InsertLink)=="function" then
+        hooksecurefunc(ChatFrameUtil,"InsertLink",InsertRequestLink)
+    end
     if ChatEdit_InsertLink then hooksecurefunc("ChatEdit_InsertLink",InsertRequestLink) end
     if HandleModifiedItemClick then
         hooksecurefunc("HandleModifiedItemClick",function(link)

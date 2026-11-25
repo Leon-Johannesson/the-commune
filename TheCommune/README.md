@@ -1,4 +1,8 @@
-# The Commune — 0.4.49
+# The Commune — 0.4.50
+
+## Modern item-link handler (0.4.50)
+
+The request editor now also listens to ChatFrameUtil.InsertLink, the modern link path used by the installed Auctionator interface. The previous release listened only to legacy global functions, which that path can bypass. The new hook uses the existing item-only, focused-field and editable Requests-page checks. It is a secure post-hook and leaves the original function and return values intact. Auction item search is unchanged. Offline checks exercise the modern-only call path; linking still needs an in-game confirmation on Forever.
 
 ## Auction items in request search (0.4.49)
 
