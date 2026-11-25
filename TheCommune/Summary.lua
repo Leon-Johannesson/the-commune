@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.44",
-    text = "The zone death panel is smaller, with an explained Unknown column."
+    version = "0.4.45",
+    text = "Unknown zone deaths now count toward PvE, leaving just PvE and PvP columns."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then

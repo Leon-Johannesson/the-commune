@@ -1,4 +1,8 @@
-# The Commune — 0.4.44
+# The Commune — 0.4.45
+
+## Two death categories (0.4.45)
+
+Unknown zone deaths now contribute to the displayed PvE count on both the floating panel and the Deaths page. The separate Unk column is removed, and tooltips explain that PvE includes older deaths and unidentified causes. PvP and overall totals stay the same. Original cause records remain intact in SavedVariables and sync, so refreshing or receiving the same data cannot add deaths twice.
 
 ## Compact zone death panel (0.4.44)
 
