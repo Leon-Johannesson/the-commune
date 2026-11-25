@@ -132,7 +132,7 @@ local function RecordDeathZone(profile)
     profile.deathZones[key]=entry
     if TC.guildKey then BroadcastZone(key,entry) end
     if TC.RefreshZoneDeaths then TC.RefreshZoneDeaths() end
-    if TC.ClassifyZoneDeath then TC.ClassifyZoneDeath(profile,key) end
+    if TC.ClassifyZoneDeath then TC.ClassifyZoneDeath(profile,key,name) end
 end
 
 function TC.RecordZoneDeathCause(profile,key,cause,store)

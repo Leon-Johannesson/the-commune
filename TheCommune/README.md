@@ -1,4 +1,12 @@
-# The Commune — 0.4.52
+# The Commune — 0.4.53
+
+## Death announcements in guild chat (0.4.53)
+
+When you die, the addon now says so in guild chat along with what killed you, for example `[The Commune] I died in Deadmines to Mr. Smite (Trash to Ashes).` The cause comes from the same death recap the PvE/PvP split already reads, so it names a player, a creature, a spell, or an environmental cause such as falling or lava. Deaths you caused yourself are reported as your own doing.
+
+If the recap never becomes readable the announcement still goes out, saying only where you died rather than guessing at a cause. Announcements are limited to one every fifteen seconds so a corpse run back into the same hazard cannot spam the guild, and nothing is sent while you are unguilded.
+
+Turn it off with `Announce my deaths in guild chat` on the Deaths tab, beside the zone panel checkbox. It is on by default and the setting is per character.
 
 ## Real level-ups and more reliable announcements (0.4.52)
 
