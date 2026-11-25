@@ -1,4 +1,8 @@
-# The Commune — 0.4.45
+# The Commune — 0.4.46
+
+## Your daily results alongside the guild (0.4.46)
+
+The quiz and Wordle guild lists now include a first row labeled You. The quiz row shows your daily answer tiles, including unanswered questions. Your Wordle row follows your guesses while playing and shows your completed result, including X/6 for a loss. Each new daily game starts fresh, and local rows come from your own saved progress rather than waiting for another client to send it back. Guildmates' sharing and credit awards are unchanged.
 
 ## Two death categories (0.4.45)
 

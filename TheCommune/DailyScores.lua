@@ -84,12 +84,13 @@ function TC.QuizBoards()
     local day, all = TC.DayID(), Scores()
     for account, days in pairs(all or {}) do
         local score = days[day]
-        if account ~= TC.db.fun.account and score and score.answered > 0 then
+        if score and (score.answered > 0 or account == TC.db.fun.account) then
             local profile = TC.store.social.accounts[account]
-            rows[#rows + 1] = {account=account, name=profile and profile.name or score.name, score=score}
+            rows[#rows + 1] = {account=account, own=account == TC.db.fun.account, name=profile and profile.name or score.name, score=score}
         end
     end
     table.sort(rows, function(a, b)
+        if a.own ~= b.own then return a.own end
         if a.name ~= b.name then return a.name < b.name end
         return a.account < b.account
     end)

@@ -15,12 +15,17 @@ function TC.IsGuildMaster(owner)
 end
 function TC.WordReward(guesses) return ({5,3,2,1,1,1})[guesses] or 0 end
 function TC.WordBoards()
-    local rows={}
+    local d,day=TC.DailyState()
+    local colors={}
+    for _,word in ipairs(d.guesses) do
+        for _,value in ipairs(TC.WordFeedback(word,TC.WordAnswer())) do colors[#colors+1]=tostring(value) end
+    end
+    local rows={{own=true,name=TC.db.fun.display,board={day=day,result=d.wordleResult or 0,colors=table.concat(colors)}}}
     for account,p in pairs(TC.store.social.accounts) do
         local board=p.wordBoard
         if account~=TC.db.fun.account and board and board.day==TC.DayID() then rows[#rows+1]={name=p.name,board=board} end
     end
-    table.sort(rows,function(a,b) return a.name<b.name end); return rows
+    table.sort(rows,function(a,b) if not not a.own~=not not b.own then return not not a.own end; return a.name<b.name end); return rows
 end
 function TC.BroadcastWordBoard()
     local d,day=TC.DailyState()

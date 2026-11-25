@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.45",
-    text = "Unknown zone deaths now count toward PvE, leaving just PvE and PvP columns."
+    version = "0.4.46",
+    text = "Your own daily quiz and Wordle results now appear first in the guild lists."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then

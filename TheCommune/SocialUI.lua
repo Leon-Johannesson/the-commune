@@ -246,7 +246,7 @@ function TC.RefreshSocialWindow()
             local entry=boards[p.boardOffset+i]; row.entry=entry; row:SetShown(entry~=nil)
             if entry then
                 local s=entry.score
-                row.name:SetText(entry.name); row.score:SetText(s.correct.."/"..s.total)
+                row.name:SetText(entry.own and "You" or entry.name); row.score:SetText(s.correct.."/"..s.total)
                 for slot,tile in ipairs(row.tiles) do
                     tile:SetShown(slot<=s.total)
                     local value=tonumber(s.colors:sub(slot,slot)) or 0
@@ -289,7 +289,9 @@ function TC.RefreshSocialWindow()
         for i,mini in ipairs(p.miniBoards) do
             local entry=boards[p.boardOffset+i]; mini:SetShown(entry~=nil)
             if entry then
-                mini.name:SetText(entry.name.." "..entry.board.result.."/6")
+                local result=entry.board.result
+                local status=result==0 and "Playing" or result==7 and "X/6" or (result.."/6")
+                mini.name:SetText((entry.own and "You" or entry.name).."  "..status)
                 for index,tile in ipairs(mini.cells) do
                     local value=tonumber(entry.board.colors:sub(index,index)); local color=value and colours[value] or {0.12,0.12,0.11}
                     tile:SetColorTexture(color[1],color[2],color[3],value and 1 or 0.35)
