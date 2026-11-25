@@ -70,6 +70,40 @@ function TC.ScanBagItems()
     end
 end
 
+local function Safe(fn,...)
+    if type(fn)~="function" then return end
+    local ok,value=pcall(fn,...)
+    if ok and not (issecretvalue and issecretvalue(value)) then return value end
+end
+function TC.ScanAuctionItems()
+    if not TC.db then return end
+    local api=C_AuctionHouse
+    local results=api and Safe(api.GetBrowseResults)
+    if type(results)=="table" and not (issecrettable and issecrettable(results)) then
+        for i=1,math.min(#results,500) do
+            local key=Safe(function() return results[i].itemKey end)
+            local id=type(key)=="table" and Safe(function() return key.itemID end)
+            id=TC.Integer(id,1,2147483647)
+            if id then
+                local info=Safe(api.GetItemKeyInfo,key)
+                local name=type(info)=="table" and Safe(function() return info.itemName end)
+                if type(name)=="string" and name~="" then
+                    TC.db.itemIndex=TC.db.itemIndex or {}; StoreName(id,name)
+                end
+                TC.LearnItem(id)
+            end
+        end
+    end
+    local count=Safe(GetNumAuctionItems,"list")
+    if type(count)=="number" then
+        for i=1,math.min(count,500) do
+            local link=Safe(GetAuctionItemLink,"list",i)
+            local id=type(link)=="string" and TC.Integer(link:match("item:(%d+)"),1,2147483647)
+            if id then TC.LearnItem(id) end
+        end
+    end
+end
+
 local function ComesBefore(score, name, id, other)
     if score~=other.score then return score<other.score end
     if name~=other.name then return name<other.name end
@@ -151,19 +185,25 @@ function TC.AttachItemSearch(box,parent,onChange)
         end
         popup:Show()
     end
-    box:SetScript("OnTextChanged",Changed); box:SetScript("OnEditFocusGained",Changed)
+    TC.RefreshItemSearch=Changed
+    box:SetScript("OnTextChanged",Changed)
+    box:SetScript("OnEditFocusGained",function() TC.ScanAuctionItems(); Changed() end)
     box:SetScript("OnEditFocusLost",function() C_Timer.After(0.2,function() popup:Hide() end) end)
     box:SetScript("OnHide",function() popup:Hide() end)
     return popup
 end
 local frame=CreateFrame("Frame")
 frame:RegisterEvent("BAG_UPDATE_DELAYED"); frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
+for _,event in ipairs({"AUCTION_HOUSE_BROWSE_RESULTS_UPDATED","AUCTION_HOUSE_BROWSE_RESULTS_ADDED","AUCTION_HOUSE_ITEM_SEARCH_RESULTS_UPDATED","AUCTION_ITEM_LIST_UPDATE"}) do
+    pcall(frame.RegisterEvent,frame,event)
+end
 frame:SetScript("OnEvent",function(_,event,id,success)
     if not TC.db then return end
     if event=="BAG_UPDATE_DELAYED" then TC.ScanBagItems()
-    elseif success then
+    elseif event=="GET_ITEM_INFO_RECEIVED" and success then
         local name=C_Item.GetItemInfo(id)
         if name then TC.db.itemIndex=TC.db.itemIndex or {}; StoreName(id,name) end
-    end
+    elseif event~="GET_ITEM_INFO_RECEIVED" then TC.ScanAuctionItems() end
+    if TC.RefreshItemSearch then TC.RefreshItemSearch() end
 end)
 

@@ -420,9 +420,16 @@ local function Build()
         TC.Refresh()
         if window.ready and window.activePage == "requests" then UpdateItem() end
     end)
-    if ChatEdit_InsertLink then
-        hooksecurefunc("ChatEdit_InsertLink", function(link)
-            if window:IsShown() and window.save:IsEnabled() and fields.item:HasFocus() then fields.item:SetText(link) end
+    local function InsertRequestLink(link)
+        if type(link)~="string" or not window:IsShown() or window.activePage~="requests" or
+            not window.save:IsEnabled() or not fields.item:HasFocus() then return end
+        local id=TC.Integer(link:match("item:(%d+)"),1,2147483647)
+        if id then TC.LearnItem(id); fields.item:SetText(tostring(id)) end
+    end
+    if ChatEdit_InsertLink then hooksecurefunc("ChatEdit_InsertLink",InsertRequestLink) end
+    if HandleModifiedItemClick then
+        hooksecurefunc("HandleModifiedItemClick",function(link)
+            if IsModifiedClick and IsModifiedClick("CHATLINK") then InsertRequestLink(link) end
         end)
     end
     window:SetScript("OnUpdate", function()

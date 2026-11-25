@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.48"
+TC.version = "0.4.49"
 TC.limit = 20
 
 function TC.Print(message)

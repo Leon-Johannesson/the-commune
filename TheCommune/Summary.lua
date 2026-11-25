@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.48",
-    text = "Overlapping addon windows now have solid backgrounds and consistent layering."
+    version = "0.4.49",
+    text = "Request search learns auction items, with improved Shift-click link support."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then

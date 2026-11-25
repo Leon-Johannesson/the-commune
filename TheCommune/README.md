@@ -1,4 +1,10 @@
-# The Commune — 0.4.48
+# The Commune — 0.4.49
+
+## Auction items in request search (0.4.49)
+
+The request item search now learns names and IDs from available auction browse results, including the older auction-list API where supported. Opening the item field also checks current auction results, and arriving item information refreshes the suggestions. Learned items remain available in later searches; this is a local known-item search, not a complete game-wide item database.
+
+Focus the request item field and Shift-left-click an item to insert its link. The request editor now also listens to the modified-item-click handler for auction interfaces that bypass the usual chat-link path. Only item links are accepted, and the handler requires the editable Requests page and focused item field; other fields and normal item interactions are left alone. Dropping an item, entering its ID, and typing an exact known name remain supported. Offline checks pass; the Forever auction interface still needs an in-game check.
 
 ## Solid, consistently layered windows (0.4.48)
 
