@@ -3,6 +3,7 @@ local _,TC=...
 -- explicit original owner; they never pass through the live sender dispatcher.
 local incoming,outgoing,lastQuery={}, {}, -100
 local serial=0
+local changedQuery
 local sharedSnapshot
 local MAX_RECORDS,MAX_PARTS,FRAGMENT=4096,512,160
 local kinds={q=true,l=true,c=true,g=true,p=true,h=true,d=true,z=true,a=true,b=true,w=true,s=true,v=true}
@@ -185,7 +186,11 @@ local function Send(key,message,background)
     if #message<=254 then TC.QueueGuildPacket((background and "relay:" or "cache:")..key,message) end
 end
 local function Active(session) return session and session.store==TC.store and GetTime()-session.when<900 end
-function TC.ResetCacheSync() incoming,outgoing={},{}; sharedSnapshot=nil; lastQuery=-100 end
+function TC.ResetCacheSync() incoming,outgoing={},{}; sharedSnapshot=nil; changedQuery=nil; lastQuery=-100 end
+function TC.NotifyRequestCache()
+    sharedSnapshot=nil
+    if TC.guildKey then Send("changed", "KU\t1") end
+end
 function TC.QueryCache(attempt)
     if not TC.store or not TC.guildKey or GetTime()-lastQuery<30 then return end
     lastQuery=GetTime(); serial=serial+1
@@ -317,8 +322,23 @@ end
 
 function TC.ReceiveCacheSync(message,sender)
     local kind=type(message)=="string" and message:match("^([^\t]+)")
-    if kind~="KQ" and kind~="KI" and kind~="KR" and kind~="KD" then return false end
+    if kind~="KQ" and kind~="KI" and kind~="KR" and kind~="KD" and kind~="KU" then return false end
     if #message>254 or not Member(sender) then return true end
+    if kind=="KU" then
+        if message~="KU\t1" or changedQuery then return true end
+        local store=TC.store
+        local token={}; changedQuery=token
+        local function Check()
+            if changedQuery~=token then return end
+            if TC.store~=store then changedQuery=nil; return end
+            local wait=31-(GetTime()-lastQuery)
+            if wait>0 then C_Timer.After(wait+math.random()*2,Check); return end
+            changedQuery=nil
+            TC.QueryCache()
+        end
+        C_Timer.After(math.max(1,31-(GetTime()-lastQuery))+math.random()*2,Check)
+        return true
+    end
     if kind=="KQ" then
         local token=message:match("^KQ\t([%d%-]+)$")
         if not token or #token>48 then return true end

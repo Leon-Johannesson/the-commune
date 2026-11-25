@@ -1,6 +1,6 @@
 local addonName, TC = ...
 _G.TheCommune = TC
-TC.version = "0.4.46"
+TC.version = "0.4.47"
 TC.limit = 20
 
 function TC.Print(message)
@@ -201,13 +201,19 @@ function TC.RequestsChanged()
     if TC.UpdateSummary and TC.wallet then TC.UpdateSummary() end
 end
 
+function TC.CanEditRequest(owner)
+    -- Only characters actually logged into this local SavedVariables account
+    -- can grant editor access; remote social/account claims are not authority.
+    return owner == TC.owner or (TC.db and TC.db.characters and TC.db.characters[owner] == true) or false
+end
+
 function TC.Rows(filter, query, includeClosed)
     local rows = {}
     if not TC.store then return rows end
     query = (query or ""):lower()
     local itemNames = {}
     for owner, slots in pairs(TC.store.owners) do
-        if filter ~= "mine" or owner == TC.owner then
+        if filter ~= "mine" or TC.CanEditRequest(owner) then
             local displayName
             for slot, r in pairs(slots) do
                 if not r.deleted and (includeClosed or TC.IsActive(r)) then
@@ -232,14 +238,20 @@ function TC.Rows(filter, query, includeClosed)
     return rows
 end
 
-function TC.Save(slot, data)
+function TC.Save(slot, data, owner)
+    owner = owner or TC.owner
+    if not TC.CanEditRequest(owner) then return nil, "Only your account characters can edit this request." end
+    if slot ~= nil and not TC.Integer(slot, 1, TC.limit) then return nil, "Invalid request slot." end
+    if owner ~= TC.owner and (not slot or not TC.store.owners[owner] or not TC.store.owners[owner][slot]) then
+        return nil, "Select an existing request. New requests belong to your current character."
+    end
     local editingExisting = slot ~= nil
     local item = TC.Integer(data.item, 1, 2147483647)
     local quantity = TC.Integer(data.quantity == nil and 1 or data.quantity, 1, 999999)
     local received = TC.Integer(data.received == nil and 0 or data.received, 0, 999999)
     if not item then return nil, "Enter an exact known item name, choose a suggestion, or drop/link an item." end
     if not quantity or not received then return nil, "Use whole numbers: quantity 1-999999, received 0-999999." end
-    local slots = TC.store.owners[TC.owner]
+    local slots = TC.store.owners[owner]
     if not slot then
         for i = 1, TC.limit do if not slots[i] or not TC.IsActive(slots[i]) then slot = i; break end end
     end
@@ -251,14 +263,16 @@ function TC.Save(slot, data)
         expires = 0, revision = revision,
         created = editingExisting and previous and TC.IsActive(previous) and previous.item==item and (previous.created or previous.revision) or revision,
         purpose = TC.Clean(data.purpose, 64), craft = "", delivery = TC.Clean(data.delivery, 40) },false)
-    TC.BroadcastSlot(slot)
+    TC.BroadcastSlot(slot, owner)
     TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
     return slot
 end
 
-function TC.Close(slot)
-    local r = TC.store.owners[TC.owner][slot]
+function TC.Close(slot, owner)
+    owner = owner or TC.owner
+    if not TC.CanEditRequest(owner) then return end
+    local r = TC.store.owners[owner] and TC.store.owners[owner][slot]
     if not r or r.deleted then return end
     -- Closing retires the request without tombstoning it, so "Include closed"
     -- still has something to show and the purpose survives. received==quantity
@@ -267,16 +281,18 @@ function TC.Close(slot)
     r.received = r.quantity
     r.revision = TC.NextRevision(r.revision)
     TC.StampSnapshot(r,false)
-    TC.BroadcastSlot(slot)
+    TC.BroadcastSlot(slot, owner)
     TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
 end
 
-function TC.Delete(slot)
-    local r = TC.store.owners[TC.owner][slot]
+function TC.Delete(slot, owner)
+    owner = owner or TC.owner
+    if not TC.CanEditRequest(owner) then return end
+    local r = TC.store.owners[owner] and TC.store.owners[owner][slot]
     if not r then return end
-    TC.store.owners[TC.owner][slot] = TC.StampSnapshot({ deleted = true, revision = TC.NextRevision(r.revision) },false)
-    TC.BroadcastSlot(slot)
+    TC.store.owners[owner][slot] = TC.StampSnapshot({ deleted = true, revision = TC.NextRevision(r.revision) },false)
+    TC.BroadcastSlot(slot, owner)
     TC.RequestsChanged()
     if TC.Refresh then TC.Refresh() end
 end

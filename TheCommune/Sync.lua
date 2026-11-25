@@ -100,8 +100,16 @@ function TC.CancelGuildPackets(prefix)
     for key in pairs(pending) do if key:sub(1,#prefix)==prefix then pending[key]=nil end end
 end
 
-function TC.BroadcastSlot(slot)
-    local r=TC.store.owners[TC.owner][slot]
+function TC.BroadcastSlot(slot, owner)
+    owner = owner or TC.owner
+    if not TC.CanEditRequest(owner) then return end
+    if owner ~= TC.owner then
+        -- Preserve the real requester: existing cache transfers carry an
+        -- explicit owner, whereas legacy R/D packets belong to their sender.
+        if TC.NotifyRequestCache then TC.NotifyRequestCache() end
+        return
+    end
+    local r=TC.store.owners[owner][slot]
     if r.created and not r.deleted then Enqueue("request-new:"..slot,TC.Encode(slot,r)) end
     if r.deleted and pending["request-new:"..slot] then Enqueue("request-new:"..slot,TC.Encode(slot,r)) end
     Enqueue(tostring(slot),TC.Encode(slot,r,true))
@@ -109,6 +117,12 @@ end
 
 local function BroadcastRequests()
     for slot in pairs(TC.store.owners[TC.owner]) do TC.BroadcastSlot(slot) end
+    for owner,slots in pairs(TC.store.owners) do
+        if owner ~= TC.owner and TC.CanEditRequest(owner) and next(slots) then
+            if TC.NotifyRequestCache then TC.NotifyRequestCache() end
+            break
+        end
+    end
 end
 
 function TC.BroadcastAll()

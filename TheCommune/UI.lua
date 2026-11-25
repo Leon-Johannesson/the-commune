@@ -1,5 +1,5 @@
 local _, TC = ...
-local window, fields, rows, selected, editingSlot
+local window, fields, rows, selected, editingSlot, editingOwner
 local filter, offset, itemID = "all", 0, nil
 local list, filterButtons = {}, {}
 local visibleRows, resizeEnabled = 7, true
@@ -60,7 +60,7 @@ end
 -- One button, two stages: an open request closes, a closed one can then be
 -- deleted for good. Keeps the editor's button row as it is.
 local function UpdateCloseButton()
-    local slots = TC.store and TC.store.owners[TC.owner]
+    local slots = TC.store and TC.store.owners[editingOwner or TC.owner]
     local r = editingSlot and slots and slots[editingSlot]
     window.deleteClosed = (r and not r.deleted and not TC.IsActive(r)) and true or false
     window.delete:SetText(window.deleteClosed and "Delete request" or "Close request")
@@ -82,7 +82,8 @@ end
 
 local function LoadSelection(entry)
     selected = entry and (entry.owner .. ":" .. entry.slot) or nil
-    editingSlot = entry and entry.owner == TC.owner and entry.slot or nil
+    editingOwner = entry and TC.CanEditRequest(entry.owner) and entry.owner or nil
+    editingSlot = editingOwner and entry.slot or nil
     local r = entry and entry.request
     itemID = r and r.item or nil
     fields.item:SetText(itemID and (itemID == TC.GOLD and "gold" or tostring(itemID)) or "")
@@ -92,8 +93,8 @@ local function LoadSelection(entry)
     fields.purpose:SetText(r and r.purpose or "")
     fields.delivery:SetText(r and r.delivery or "Mail or trade to me")
     window.editorTitle:SetText(entry and ("Request by " .. TC.DisplayName(entry.owner)) or "New request")
-    window.feedback:SetText(entry and entry.owner ~= TC.owner and "Only the requester can edit this request." or "")
-    SetEditable(not entry or entry.owner == TC.owner)
+    window.feedback:SetText(entry and not TC.CanEditRequest(entry.owner) and "Only your account characters can edit this request." or "")
+    SetEditable(not entry or TC.CanEditRequest(entry.owner))
     UpdateItem(); TC.Refresh()
 end
 
@@ -138,7 +139,7 @@ end
 
 function TC.Refresh()
     if not window or not window:IsShown() or not TC.store or not window.ready then return end
-    if not TC.ApplyGuildAvailability(window) then editingSlot=nil; selected=nil; return end
+    if not TC.ApplyGuildAvailability(window) then editingSlot=nil; editingOwner=nil; selected=nil; return end
     if window.guildStateChanged then window.guildStateChanged=false; LoadSelection(nil); Layout(); return end
     if window.activePage=="social" then TC.RefreshSocialWindow(); return end
     if window.activePage~="requests" then
@@ -148,7 +149,7 @@ function TC.Refresh()
         return
     end
     if editingSlot then
-        local r = TC.store.owners[TC.owner][editingSlot]
+        local r = TC.store.owners[editingOwner or TC.owner][editingSlot]
         -- Keep an open editor current without replacing a manual correction.
         if r and not r.deleted and fields.received:GetText() == loadedReceived then
             local received = tostring(r.received)
@@ -342,12 +343,13 @@ local function Build()
     fields.delivery = Edit(window.editor, "Delivery instructions", 40)
     window.save = Button(window.editor, "Save request", function()
         local slot, err = TC.Save(editingSlot, { item = itemID, quantity = fields.quantity:GetText(), received = fields.received:GetText(),
-            purpose = fields.purpose:GetText(), delivery = fields.delivery:GetText() })
+            purpose = fields.purpose:GetText(), delivery = fields.delivery:GetText() }, editingOwner)
         if slot then
-            editingSlot = slot; selected = TC.owner .. ":" .. slot
+            editingOwner = editingOwner or TC.owner
+            editingSlot = slot; selected = editingOwner .. ":" .. slot
             loadedReceived = fields.received:GetText()
             window.delete:Enable(); UpdateCloseButton()
-            window.editorTitle:SetText("Request by " .. TC.DisplayName(TC.owner))
+            window.editorTitle:SetText("Request by " .. TC.DisplayName(editingOwner))
             window.feedback:SetText("Saved. " .. (TC.guildKey and "Queued for guild sharing." or "Personal request."))
             TC.Refresh()
         else window.feedback:SetText(err) end
@@ -355,7 +357,7 @@ local function Build()
     window.delete = Button(window.editor, "Close request", function()
         if not editingSlot then return end
         local removing = window.deleteClosed
-        if removing then TC.Delete(editingSlot) else TC.Close(editingSlot) end
+        if removing then TC.Delete(editingSlot, editingOwner) else TC.Close(editingSlot, editingOwner) end
         LoadSelection(nil)
         window.feedback:SetText(removing and "Request deleted." or
             "Request closed. Tick Include closed to see it, then delete it for good.")

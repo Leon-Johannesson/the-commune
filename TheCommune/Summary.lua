@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.46",
-    text = "Your own daily quiz and Wordle results now appear first in the guild lists."
+    version = "0.4.47",
+    text = "Your characters can now edit, close and delete each other's requests."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then

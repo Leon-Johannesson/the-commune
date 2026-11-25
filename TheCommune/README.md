@@ -1,4 +1,12 @@
-# The Commune — 0.4.46
+# The Commune — 0.4.47
+
+## Manage requests across your characters (0.4.47)
+
+Characters sharing this account's SavedVariables can now edit, close and delete each other's existing requests. My requests includes your known alts, and selecting an alt's row keeps that character as the requester throughout saving and closing. New requests still belong to the currently logged-in character.
+
+Log each alt in with The Commune on this WoW installation at least once so it is recognized locally. The local character registry controls editor access; received Social account claims do not grant permission. Requests remain scoped to the current guild, and separate installations do not automatically share this local ownership registry.
+
+Alt edits retain their original owner and revision through the existing cache protocol. A small additive notification asks updated peers to refresh their cache after the normal sync cooldown; older peers can retrieve the changes on their next cache sync. No legacy request packet is sent under the editing alt's name. Saved request records and deletion tombstones remain compatible with previous versions. Offline two-client and editor checks pass; live in-game sharing still needs verification.
 
 ## Your daily results alongside the guild (0.4.46)
 
