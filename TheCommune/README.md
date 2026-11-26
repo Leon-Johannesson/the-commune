@@ -1,5 +1,13 @@
-# The Commune — 0.4.57
+# The Commune — 0.4.58
 
+
+## Deaths and level-ups travel through the addon (0.4.58)
+
+This client refuses to let an addon post in guild chat, so neither the death announcements added in 0.4.53 nor the level-up announcements could ever arrive. The blocked attempts were visible only as a failure line in /commune debug. Both now travel over the addon's own guild channel, the same transport the hitlist uses to share sightings, and each guildmate's copy prints the line locally.
+
+The announcing player's name never goes on the wire. A death packet carries only the time, the zone and the cause; a level packet carries only the time and the level. Every receiver names the sender the transport already proved, so a packet cannot claim that somebody else died or levelled. Zones and causes are sanitised on arrival like any other untrusted field.
+
+Announcements are live chatter rather than a stored record. One older than two minutes is dropped instead of being replayed by a late relay, each sender's announcement prints only once, and nothing is written to the guild store or the offline cache. Level-ups still announce on even levels only. Everyone needs this version to see either kind; older copies ignore the new packets silently.
 
 ## Completion marks with requester confirmation (0.4.57)
 

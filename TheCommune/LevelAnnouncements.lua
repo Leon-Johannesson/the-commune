@@ -1,5 +1,5 @@
 local _, TC = ...
-local pending, sending, blocked
+local seenNews = {}
 
 local function Safe(fn, ...)
     if type(fn) ~= "function" then return end
@@ -15,54 +15,47 @@ function TC.DebugLevels()
     TC.Print("Level announcements: seen "..tostring(TC.db and TC.db.levelAnnouncements and TC.db.levelAnnouncements[TC.owner] or "none")..
         " | "..(status and ("level "..status.level..": "..status.text) or "no send attempted this version"))
 end
-local function Try(work)
-    if pending~=work or TC.owner~=work.owner then return end
-    if GetTime()-work.started>120 then
-        pending=nil; Status(work.level,"expired before chat became available"); return
-    end
-    local guild=Safe(GetGuildInfo,"player")
-    if Safe(IsInGuild)==false or (work.guild and type(guild)=="string" and guild~="" and guild~=work.guild) then
-        pending=nil; Status(work.level,"cancelled after guild change"); return
-    end
-    if Safe(InCombatLockdown) or Safe(C_ChatInfo and C_ChatInfo.InChatMessagingLockdown) or type(guild)~="string" or guild=="" then
-        Status(work.level,"waiting for combat/chat/guild readiness")
-        C_Timer.After(2,function() Try(work) end); return
-    end
-    work.guild=work.guild or guild
-    local send=C_ChatInfo and C_ChatInfo.SendChatMessage or SendChatMessage
-    if type(send)~="function" then pending=nil; Status(work.level,"chat API unavailable"); return end
-    work.attempts=work.attempts+1
-    sending,blocked=true,false
-    local ok,result=pcall(send,"[The Commune] Ding! I just reached level "..work.level.."!","GUILD")
-    sending=false
-    -- This API usually returns nil, so lack of an echo is not grounds to send
-    -- twice. Retry only explicit rejection, an error, or a synchronous block.
-    if ok and result~=false and not blocked then
-        pending=nil; Status(work.level,"submitted to guild chat"); return
-    end
-    if work.attempts>=3 then
-        pending=nil; Status(work.level,"failed after 3 attempts")
-        TC.Print("Could not announce level "..work.level.." in guild chat. /commune debug includes the send status.")
-    else
-        Status(work.level,"send rejected; retry queued")
-        C_Timer.After(work.attempts*3,function() Try(work) end)
-    end
+
+-- This client blocks SendChatMessage for addons, so a level-up cannot reach
+-- real guild chat at all. Carry it over the addon channel instead and let each
+-- guildmate's copy print it, the way death news already travels.
+local function Show(owner, level)
+    TC.Print(TC.DisplayName(owner) .. " reached level " .. level .. "!")
 end
+
+local function Announce(level)
+    if not TC.db or not TC.guildKey then Status(level, "no guild store to broadcast to"); return end
+    -- The level is the only claim on the wire. Every receiver names the sender
+    -- the transport proved, so a packet cannot level somebody else up.
+    TC.QueueGuildPacket("level-news:" .. level, table.concat({"LA", time(), level}, "\t"))
+    Status(level, "broadcast to the guild")
+    Show(TC.owner, level)
+end
+
+function TC.ReceiveLevelNews(message, sender)
+    if type(message) ~= "string" or #message > 254 or message:sub(1, 3) ~= "LA\t" then return false end
+    local when, level = message:match("^LA\t(%d+)\t(%d+)$")
+    when = TC.Integer(when, 1, time() + 86400)
+    level = TC.Integer(level, 1, 255)
+    if not when or not level or sender == TC.owner then return true end
+    -- A level-up is live news, not a record: never replay a stale one from a
+    -- late relay, and never print the same one twice.
+    if math.abs(time() - when) > 120 or (seenNews[sender] or 0) >= when then return true end
+    seenNews[sender] = when
+    Show(sender, level)
+    return true
+end
+
 local events = CreateFrame("Frame")
-for _,event in ipairs({"PLAYER_LOGIN","PLAYER_LEVEL_UP","PLAYER_LEVEL_CHANGED","ADDON_ACTION_BLOCKED","ADDON_ACTION_FORBIDDEN"}) do
+for _,event in ipairs({"PLAYER_LOGIN","PLAYER_LEVEL_UP","PLAYER_LEVEL_CHANGED"}) do
     pcall(events.RegisterEvent,events,event)
 end
 events:SetScript("OnEvent", function(_, event, level, newLevel, real)
-    if event=="ADDON_ACTION_BLOCKED" or event=="ADDON_ACTION_FORBIDDEN" then
-        if sending and level=="TheCommune" then blocked=true end
-        return
-    end
     if not TC.db or not TC.owner then return end
     TC.db.levelAnnouncements = TC.db.levelAnnouncements or {}
     local seen = TC.db.levelAnnouncements
     local previous = TC.Integer(seen[TC.owner], 1, 255) or 0
     if event == "PLAYER_LOGIN" then
-        pending=nil
         -- Installing or reloading is not a level-up, and old milestones are
         -- never replayed into a guild joined later.
         local current = TC.Integer(Safe(UnitLevel, "player"), 1, 255)
@@ -84,6 +77,5 @@ events:SetScript("OnEvent", function(_, event, level, newLevel, real)
     if (type(guild)~="string" or guild=="") and Safe(IsInGuild)~=true then
         Status(level,"not in a guild at level-up"); return
     end
-    local work={owner=TC.owner,level=level,guild=type(guild)=="string" and guild~="" and guild or nil,started=GetTime(),attempts=0}
-    pending=work; Try(work)
+    Announce(level)
 end)

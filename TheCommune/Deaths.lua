@@ -204,6 +204,7 @@ function TC.BroadcastDeaths(p)
 end
 function TC.ReceiveDeaths(message,sender)
     local kind=message:sub(1,3)
+    if kind=="DA\t" then return TC.ReceiveDeathNews and TC.ReceiveDeathNews(message,sender) or true end
     if kind=="PZ\t" or kind=="PY\t" then ReceiveZone(message,sender); return true end
     if kind~="PT\t" then return false end
     local revision,count,source=message:match("^PT\t(%d+)\t(%d+)\t([01])$")

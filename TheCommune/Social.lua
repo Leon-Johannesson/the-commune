@@ -286,6 +286,7 @@ local function BindAccount(sender,account,revision,relayed)
 end
 function TC.ReceiveSocial(message,sender,relayed)
     if TC.ReceiveHitCache(message,sender) then return true end
+    if TC.ReceiveLevelNews and TC.ReceiveLevelNews(message,sender) then return true end
     if TC.ReceivePvP and TC.ReceivePvP(message,sender) then return true end
     if TC.ReceiveGear and TC.ReceiveGear(message,sender,relayed) then return true end
     local f=Fields(message); local kind=f[1]
