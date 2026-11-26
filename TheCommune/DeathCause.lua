@@ -1,5 +1,6 @@
 local _, TC = ...
 local observed, serial, lastFatal, lastAnnounce = {}, 0, nil, -100
+local pending, sending, blocked
 local environments = {DROWNING="drowning", FALLING="the ground", FATIGUE="exhaustion",
     FIRE="fire", LAVA="lava", SLIME="slime"}
 
@@ -94,22 +95,70 @@ local function Describe(detail)
     return detail.source or detail.spell
 end
 
+local function Status(text)
+    if not TC.db or not TC.owner then return end
+    TC.db.deathAnnouncementStatus = TC.db.deathAnnouncementStatus or {}
+    TC.db.deathAnnouncementStatus[TC.owner] = {when = time(), text = text}
+end
+
+function TC.DebugDeathAnnounce()
+    local status = TC.db and TC.db.deathAnnouncementStatus and TC.db.deathAnnouncementStatus[TC.owner]
+    TC.Print("Death announcements: " .. (status and status.text or "no send attempted this version"))
+end
+
+local function Try(work)
+    if pending ~= work or TC.owner ~= work.owner then return end
+    if GetTime() - work.started > 120 then
+        pending = nil; Status("expired before chat became available"); return
+    end
+    local guild = Safe(GetGuildInfo, "player")
+    if Safe(IsInGuild) == false or (work.guild and type(guild) == "string" and guild ~= "" and guild ~= work.guild) then
+        pending = nil; Status("cancelled after guild change"); return
+    end
+    -- Dying leaves the client in a chat-messaging lockdown, so a single send
+    -- straight off the death event is dropped without raising an error.
+    if Safe(InCombatLockdown) or Safe(C_ChatInfo and C_ChatInfo.InChatMessagingLockdown) or type(guild) ~= "string" or guild == "" then
+        Status("waiting for combat/chat/guild readiness")
+        C_Timer.After(2, function() Try(work) end); return
+    end
+    work.guild = work.guild or guild
+    local send = C_ChatInfo and C_ChatInfo.SendChatMessage or SendChatMessage
+    if type(send) ~= "function" then pending = nil; Status("chat API unavailable"); return end
+    work.attempts = work.attempts + 1
+    sending, blocked = true, false
+    local ok, result = pcall(send, work.text, "GUILD")
+    sending = false
+    -- This API usually returns nil, so a missing echo is not grounds to send
+    -- twice. Retry only an explicit rejection, an error, or a caught block.
+    if ok and result ~= false and not blocked then
+        pending = nil; Status("submitted to guild chat"); return
+    end
+    if work.attempts >= 3 then
+        pending = nil; Status("failed after 3 attempts")
+        TC.Print("Could not announce that death in guild chat. /commune debug includes the send status.")
+    else
+        Status("send rejected; retry queued")
+        C_Timer.After(work.attempts * 3, function() Try(work) end)
+    end
+end
+
 local function Announce(zone, detail)
     if not TC.db or not TC.guildKey then return end
     local now = GetTime()
     -- A corpse run back into the same hazard should not spam the guild.
     if now - lastAnnounce < 15 then return end
     local guild = Safe(GetGuildInfo, "player")
-    if type(guild) ~= "string" or guild == "" then return end
-    local send = C_ChatInfo and C_ChatInfo.SendChatMessage or SendChatMessage
-    if type(send) ~= "function" then return end
+    if (type(guild) ~= "string" or guild == "") and Safe(IsInGuild) ~= true then
+        Status("not in a guild at death"); return
+    end
     local how = Describe(detail)
     local where = type(zone) == "string" and zone ~= "" and (" in " .. zone) or ""
     local text = how and ("[The Commune] I died" .. where .. " to " .. how .. ".")
         or ("[The Commune] I died" .. where .. ". No idea what hit me.")
     lastAnnounce = now
-    local ok, result = pcall(send, TC.Clean(text, 230), "GUILD")
-    if not ok or result == false then TC.Print("Could not announce that death in guild chat.") end
+    pending = {owner = TC.owner, text = TC.Clean(text, 230), started = GetTime(), attempts = 0,
+        guild = type(guild) == "string" and guild ~= "" and guild or nil}
+    Try(pending)
 end
 
 function TC.ClassifyZoneDeath(profile, key, zone)
@@ -140,8 +189,13 @@ function TC.ClassifyZoneDeath(profile, key, zone)
 end
 
 local events = CreateFrame("Frame")
-for _, event in ipairs({"PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED"}) do events:RegisterEvent(event) end
+for _, event in ipairs({"PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "NAME_PLATE_UNIT_ADDED",
+    "ADDON_ACTION_BLOCKED", "ADDON_ACTION_FORBIDDEN"}) do pcall(events.RegisterEvent, events, event) end
 events:SetScript("OnEvent", function(_, event, unit)
+    if event == "ADDON_ACTION_BLOCKED" or event == "ADDON_ACTION_FORBIDDEN" then
+        if sending and unit == "TheCommune" then blocked = true end
+        return
+    end
     if not TC.db or not TC.db.fun then return end
     TC.ObserveDeathCauseUnit(event == "PLAYER_TARGET_CHANGED" and "target" or event == "UPDATE_MOUSEOVER_UNIT" and "mouseover" or unit)
 end)

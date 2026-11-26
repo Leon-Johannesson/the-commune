@@ -1,4 +1,12 @@
-# The Commune — 0.4.54
+# The Commune — 0.4.55
+
+## Reliable death announcement delivery (0.4.55)
+
+Death announcements sent nothing on a real death. Dying leaves the client in a chat-messaging lockdown, and the single send fired straight off the death event was dropped without raising an error or returning a failure, so the addon treated it as delivered and said nothing.
+
+The death announcement now uses the same queued delivery the even-level announcements gained in 0.4.52. It waits for combat and the chat-messaging lockdown to end, retries up to three times after an explicit rejection or a caught block, expires after two minutes, and is cancelled if the guild changes. A nil return is treated as submitted rather than retried, so a delivered message is never sent twice.
+
+`/commune debug` now reports this character's latest death announcement status alongside the level announcement status. The announcement text, the fifteen-second rate limit and the refusal to invent a cause are unchanged.
 
 ## Death announcements are mandatory (0.4.54)
 
