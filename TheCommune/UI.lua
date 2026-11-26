@@ -504,6 +504,10 @@ SlashCmdList.THECOMMUNE = function(command)
     if not TC.store then TC.Print("Please wait until your character has finished logging in."); return end
     TC.RefreshGuildMembership()
     command = (command or ""):match("^%s*(.-)%s*$"):lower()
+    if command=="levelpreview" then
+        if not TC.PreviewLevelPopup or not TC.PreviewLevelPopup() then TC.Print("The temporary level-up preview is available only for Radio Lysander, outside combat.") end
+        return
+    end
     if not TC.guildKey and command~="" and command~="resize" and command~="debug" then TC.GetMainWindow():Show(); TC.Refresh(); return end
     if command=="quiz" or command=="wordle" or command=="credits" or command=="hitlist" or command=="scores" or command=="pvp" or command=="aim" then TC.OpenSocial(command); return end
     if command == "sync" then TC.Query(true); return end

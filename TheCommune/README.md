@@ -1,4 +1,12 @@
-# The Commune — 0.4.50
+# The Commune — 0.4.51
+
+## Level-up stat popup (0.4.51)
+
+Every actual level-up now shows a movable, portrait-topped window in The Commune's dark ledger style. It compares max health, max mana when present, and Strength, Agility, Stamina, Intellect and Spirit, with gains in green. The portrait uses the client's player portrait. Stats unavailable on the client are omitted, and a missing old value is shown as a question mark rather than invented.
+
+The addon keeps a live in-session snapshot and waits for the new level's stats before comparing. These are character totals including current equipment and effects, so equipment or buff changes at the same time can affect the differences. Duplicate level events are ignored, rapid levels coalesce, and the popup waits until combat ends before appearing. It closes after 20 seconds or with its close button; its dragged position is saved. Ordinary login/reload does not replay a level-up. The existing even-level guild-chat announcement is unchanged.
+
+For this design preview, Radio Lysander alone gets a one-time automatic popup after login, clearly marked as example values, which stays until closed. On that exact character, /commune levelpreview can reopen the temporary preview outside combat. The preview changes no real stats or rewards and sends no chat or guild data. Other characters only receive real level-up popups.
 
 ## Modern item-link handler (0.4.50)
 

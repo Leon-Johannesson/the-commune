@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.50",
-    text = "Request item linking now supports the modern auction-house link handler."
+    version = "0.4.51",
+    text = "Level-ups now show your portrait and before/after character stats."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then
