@@ -5,7 +5,7 @@ This file is the single source of truth. `CLAUDE.md` only imports it. Edit rules
 
 ## Project
 
-The Commune is a World of Warcraft addon for the **WoW: Forever** private client (`## Interface: 16001`).
+The Commune is a World of Warcraft addon for **WoW: Forever**, Blizzard's third branch of the game (`## Interface: 16001`, patch 1.60.1). Forever is an official client installed from the Battle.net app, not a private server: CurseForge and WowUp both list it as a supported game flavour, so the addon can be published like any other.
 It is a guild toolkit: item request board, guild crafts catalog, projects, PvP hitlist, Social Credits, and daily games (quiz, Wordle-style word game, aim trainer).
 
 - Plain Lua 5.1 (WoW's embedded runtime) + the WoW client API. **No external libraries** (no Ace3, LibStub, etc.) and no build step.
@@ -69,6 +69,24 @@ For a change players can see or use, update the version and one-sentence login n
 After each addon update, package the verified version as `TheCommune-<version>.zip` with `TheCommune/` at the archive root. Upload that exact ZIP to the [Versions thread under #commune-addon](https://discord.com/channels/1573065951283515482/1573664576703045703) with the version and a one-line summary of what changed. The project owner authorizes this release post. Use the existing thread and post once per release. Changes to repository instructions alone do not trigger an upload.
 
 On the owner's Windows workstation, run `pwsh -File scripts/Post-Version.ps1 -ZipPath <path-to-zip> -Summary "Brief description of the change"` from the repository. It uses the Windows-encrypted webhook stored at `.local/discord-webhook.dpapi`, which is ignored by Git. Keep the raw URL out of files, commits, logs, and chat. Other machines need their own authorized local credential: copy the URL and run `powershell -ExecutionPolicy Bypass -File scripts\Set-DiscordWebhook.ps1 -FromClipboard` once on that machine. Prefer the clipboard switch: many terminals drop a paste at a hidden `Read-Host` prompt and capture only the first character. Windows PowerShell 5.1 also works (`powershell -File scripts/Post-Version.ps1 ...`) where `pwsh` is absent; keep `Post-Version.ps1` pure ASCII, because 5.1 reads this BOM-less file as Windows-1252 and a stray non-ASCII byte can terminate a string. If the upload fails or a credential is unavailable, report that the ZIP was not posted.
+
+## Publishing to addon managers
+
+The Discord thread is no longer the only channel. Pushing a tag publishes a GitHub release, and the WowUp Hub reads GitHub releases, so a tag is all WowUp needs.
+
+1. Land the version bump on `main` first — all three places above, plus `Summary.lua` and the new `README.md` history section.
+2. Tag and push it: `git tag v0.4.58 && git push origin v0.4.58`.
+3. `.github/workflows/release.yml` refuses the tag unless `TheCommune.toc` and `Core.lua` both match it and `README.md` has a section for that version. It then packages `TheCommune-<version>-forever.zip` and publishes a release using that section as the notes.
+
+The `-forever` suffix is how WowUp matches a non-Retail game flavour. `TheCommune/` must stay at the archive root; every installer depends on it.
+
+To build a zip by hand, run `powershell -ExecutionPolicy Bypass -File scripts\New-Package.ps1` (add `-Suffix forever` for the flavour-suffixed name). It refuses to package a half-bumped release, and it writes forward-slash entry names, which `Compress-Archive` does not. Keep it pure ASCII for the same reason as `Post-Version.ps1`.
+
+The project is MIT licensed (`LICENSE`). Don't add code or data that cannot be redistributed under it; the bundled word list is public domain and the quiz questions are original, and both keep their own source/licence files.
+
+Released tags are public the moment they are pushed. Don't delete or move one to fix a mistake; ship the next patch version instead.
+
+CurseForge is a separate, manually created project and is **not** wired up. Its author documentation was unreachable when this was written, so treat any upload steps as unverified until someone has done it once.
 
 ## Git and collaboration (two people, two different AI tools)
 

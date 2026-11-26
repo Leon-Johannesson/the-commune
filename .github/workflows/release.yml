@@ -1,0 +1,65 @@
+name: Release
+
+# Tagging v<version> publishes a GitHub release with the packaged addon
+# attached. The WowUp Hub reads GitHub releases, so this is what makes a
+# version installable outside the Discord thread.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the addon version
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          toc=$(grep -m1 '^## Version:' TheCommune/TheCommune.toc | tr -d '\r' | sed 's/^## Version:[[:space:]]*//')
+          core=$(grep -m1 'TC.version' TheCommune/Core.lua | tr -d '\r' | sed 's/.*"\(.*\)".*/\1/')
+          echo "tag=$version toc=$toc core=$core"
+          if [ "$toc" != "$version" ] || [ "$core" != "$version" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME disagrees with TheCommune.toc ($toc) or Core.lua ($core). Bump all three places first."
+            exit 1
+          fi
+
+      - name: Package the addon
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          # WowUp matches a non-Retail flavour by the zip's trailing suffix, and
+          # TheCommune/ must sit at the archive root for every installer.
+          zip -r -X "TheCommune-${version}-forever.zip" TheCommune
+          unzip -l "TheCommune-${version}-forever.zip" | head -5
+
+      - name: Extract the release notes from the version history
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          awk -v want="($version)" '
+            /^## / { if (found) exit; if (index($0, want)) { found = 1; print; next } }
+            found  { print }
+          ' TheCommune/README.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "::error::TheCommune/README.md has no section for ($version). Add one before tagging."
+            exit 1
+          fi
+          cat notes.md
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          gh release create "$GITHUB_REF_NAME" \
+            --title "The Commune $version" \
+            --notes-file notes.md \
+            "TheCommune-${version}-forever.zip"
