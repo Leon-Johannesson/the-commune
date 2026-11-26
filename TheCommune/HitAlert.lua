@@ -109,6 +109,7 @@ local function PositionTargets()
     if not targets or InCombat() then return end
     local left, top = alert:GetLeft(), alert:GetTop()
     if not alert:IsShown() or dragging or not left or not top then targets:Hide(); return end
+    targets:SetFrameLevel(alert:GetFrameLevel() + 5)
     targets:ClearAllPoints()
     targets:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left + 12, top - 32)
     targets:Show()
@@ -131,7 +132,10 @@ local function BuildTargets()
         local row = CreateFrame("Button", nil, targets, "SecureActionButtonTemplate")
         row:SetSize(width - 24, rowHeight)
         row:SetPoint("TOPLEFT", 0, -(i - 1) * rowHeight)
-        row:RegisterForClicks("LeftButtonUp")
+        row:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
+        -- SecureActionButton otherwise follows ActionButtonUseKeyDown, which
+        -- can ignore the only release edge the old button registered.
+        row:SetAttribute("useOnKeyDown", false)
         row:EnableMouseWheel(true)
         row:SetScript("OnMouseWheel", alert:GetScript("OnMouseWheel"))
         row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
@@ -139,10 +143,25 @@ local function BuildTargets()
         row:SetScript("OnLeave", function() GameTooltip:Hide() end)
         row:SetScript("PreClick", function(self)
             if InCombat() then return end
-            local unit
-            if not Safe(SpellIsTargeting) and not Safe(CursorHasItem) then unit = FindUnit(self.sighting) end
-            self:SetAttribute("unit", unit)
-            self:SetAttribute("type", unit and "target" or nil)
+            local sighting = self.sighting
+            local unit, name
+            if sighting and store == TC.store and GetTime() - sighting.seen <= 6 and
+                not Safe(SpellIsTargeting) and not Safe(CursorHasItem) then
+                unit = FindUnit(sighting)
+                -- Hovering this button removes the original world mouseover.
+                -- An exact-name action can still select that recently seen
+                -- player without a live nameplate token. Never insert commands.
+                if not unit and type(sighting.name) == "string" and not sighting.name:find("[%c|]") then
+                    name = TC.Clean(sighting.name, 100)
+                    if name == "" then name = nil end
+                end
+            end
+            self:SetAttribute("type", nil)
+            self:SetAttribute("unit", nil)
+            self:SetAttribute("macrotext", nil)
+            self:SetAttribute("unit1", unit)
+            self:SetAttribute("macrotext1", name and ("/targetexact [nocombat] " .. name) or nil)
+            self:SetAttribute("type1", unit and "target" or name and "macro" or nil)
         end)
         targets.rows[i] = row
     end
@@ -155,6 +174,7 @@ local function Build()
     alert:SetBackdrop({bgFile="Interface\\Buttons\\WHITE8X8", edgeFile="Interface\\Tooltips\\UI-Tooltip-Border", edgeSize=12})
     TC.StyleWindow(alert)
     TC.RememberWindow(alert, "hitAlert", nil, true)
+    alert:HookScript("OnMouseDown", PositionTargets)
     alert:HookScript("OnDragStart", function() dragging=true; PositionTargets() end)
     alert:HookScript("OnDragStop", function() dragging=false; PositionTargets() end)
     alert:HookScript("OnHide", function() dragging=false; PositionTargets() end)
@@ -206,6 +226,10 @@ function TC.RefreshHitAlert()
         end
         if targets and not InCombat() then
             targets.rows[i].sighting = sighting
+            -- A scrolled/reused row must not retain a different enemy's action.
+            targets.rows[i]:SetAttribute("type1", nil)
+            targets.rows[i]:SetAttribute("unit1", nil)
+            targets.rows[i]:SetAttribute("macrotext1", nil)
             targets.rows[i]:SetShown(sighting ~= nil)
         end
     end

@@ -1,5 +1,13 @@
-# The Commune — 0.4.55
+# The Commune — 0.4.56
 
+
+## Reliable nearby-hitlist targeting (0.4.56)
+
+The nearby-hitlist buttons now explicitly act on mouse release and register both click edges. This fixes a secure-button mismatch where enabling ActionButtonUseKeyDown could make a row highlight without targeting. Clicking a row uses a freshly verified visible unit token; if moving from the world onto the alert has removed its mouseover token, a button-local /targetexact [nocombat] action uses that recently seen player's full name instead. No saved macro slots are created or overwritten, and no attack or automatic target action is added.
+
+The targeting overlay stays above its own alert when the window is raised. Scrolled/reused rows clear previous actions, stale sightings and recycled unit GUIDs are checked, and item/spell cursors suppress the action. Target buttons still hide during combat, with no protected changes made in lockdown. There is no alive-only condition, so being dead does not disable an otherwise valid click; the client still determines target availability and range.
+
+This follows the release-edge and target-action patterns in Blizzard's [SecureTemplates.lua](https://github.com/Gethe/wow-ui-source/blob/live/Interface/AddOns/Blizzard_FrameXML/SecureTemplates.lua). Offline regression checks reproduce the previous click-setting failure and cover both settings, the exact-name fallback, cursor protection and combat safety. Live targeting on Forever still needs in-game confirmation.
 ## Reliable death announcement delivery (0.4.55)
 
 Death announcements sent nothing on a real death. Dying leaves the client in a chat-messaging lockdown, and the single send fired straight off the death event was dropped without raising an error or returning a failure, so the addon treated it as delivered and said nothing.
