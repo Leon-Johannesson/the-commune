@@ -1,5 +1,11 @@
-# The Commune — 0.4.58
+# The Commune — 0.4.59
 
+
+## Installable through addon managers (0.4.59)
+
+No gameplay changes; the addon is identical to 0.4.58. Published releases now carry a release.json file alongside the packaged zip. That file is how WowUp works out which game flavours a build supports, and without it an install fails outright with "Could not find primary toc", whatever the zip is named. The metadata declares WoW: Forever and interface 16001, read from the manifest at build time so it cannot drift.
+
+Installing from the Discord thread is unchanged. Nobody has to switch to an addon manager; this only makes that route work for anyone who prefers it.
 
 ## Deaths and level-ups travel through the addon (0.4.58)
 

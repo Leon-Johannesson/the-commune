@@ -42,6 +42,23 @@ jobs:
           zip -r -X "TheCommune-${version}-forever.zip" TheCommune
           unzip -l "TheCommune-${version}-forever.zip" | head -5
 
+      - name: Write the WowUp release metadata
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          interface=$(grep -m1 '^## Interface:' TheCommune/TheCommune.toc | tr -d '\r' | sed 's/^## Interface:[[:space:]]*//')
+          # WowUp's GitHub provider reads release.json to learn which game
+          # flavours a zip supports. Without it the install fails outright with
+          # "Could not find primary toc", whatever the zip is named.
+          jq -n \
+            --arg name "The Commune" \
+            --arg version "$version" \
+            --arg filename "TheCommune-${version}-forever.zip" \
+            --argjson interface "$interface" \
+            '{releases:[{name:$name,version:$version,filename:$filename,nolib:false,metadata:[{flavor:"forever",interface:$interface}]}]}' \
+            > release.json
+          cat release.json
+
       - name: Extract the release notes from the version history
         run: |
           set -euo pipefail
@@ -65,4 +82,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" \
             --title "The Commune $version" \
             --notes-file notes.md \
-            "TheCommune-${version}-forever.zip"
+            "TheCommune-${version}-forever.zip" \
+            release.json
