@@ -3,6 +3,7 @@ local window, fields, rows, selected, editingSlot, editingOwner
 local filter, offset, itemID = "all", 0, nil
 local list, filterButtons = {}, {}
 local visibleRows, resizeEnabled = 7, true
+local selectedRequest
 local loadedReceived
 local Layout
 
@@ -63,7 +64,8 @@ local function UpdateCloseButton()
     local slots = TC.store and TC.store.owners[editingOwner or TC.owner]
     local r = editingSlot and slots and slots[editingSlot]
     window.deleteClosed = (r and not r.deleted and not TC.IsActive(r)) and true or false
-    window.delete:SetText(window.deleteClosed and "Delete request" or "Close request")
+    local marked=editingOwner and editingSlot and TC.RequestMarkNames and #TC.RequestMarkNames(editingOwner,editingSlot)>0
+    window.delete:SetText(window.deleteClosed and "Delete request" or marked and "Confirm done" or "Close request")
 end
 
 local function SetEditable(editable)
@@ -74,6 +76,20 @@ local function SetEditable(editable)
     UpdateCloseButton()
 end
 
+local function UpdateMarkControls()
+    if not window.markStatus then return end
+    local entry=selectedRequest
+    local slots=entry and TC.store.owners[entry.owner]
+    local r=slots and slots[entry.slot]
+    local names=entry and TC.RequestMarkNames(entry.owner,entry.slot) or {}
+    window.markStatus:SetText(#names>0 and ("Marked done by "..table.concat(names,", ").." - awaiting requester confirmation") or "")
+    if entry and not TC.CanEditRequest(entry.owner) then
+        window.save:SetText(TC.OwnRequestMark(entry.owner,entry.slot) and "Undo my mark" or "Mark as done")
+        window.save:SetEnabled(TC.guildKey~=nil and r and TC.IsActive(r) or false)
+    else window.save:SetText("Save request") end
+    UpdateCloseButton()
+end
+
 local function UpdateItem()
     local name, _, texture = TC.ItemName(itemID)
     window.itemSlot.icon:SetTexture(texture or 134400)
@@ -81,6 +97,7 @@ local function UpdateItem()
 end
 
 local function LoadSelection(entry)
+    selectedRequest=entry
     selected = entry and (entry.owner .. ":" .. entry.slot) or nil
     editingOwner = entry and TC.CanEditRequest(entry.owner) and entry.owner or nil
     editingSlot = editingOwner and entry.slot or nil
@@ -93,7 +110,7 @@ local function LoadSelection(entry)
     fields.purpose:SetText(r and r.purpose or "")
     fields.delivery:SetText(r and r.delivery or "Mail or trade to me")
     window.editorTitle:SetText(entry and ("Request by " .. TC.DisplayName(entry.owner)) or "New request")
-    window.feedback:SetText(entry and not TC.CanEditRequest(entry.owner) and "Only your account characters can edit this request." or "")
+    window.feedback:SetText(entry and not TC.CanEditRequest(entry.owner) and "You can mark this done; the requester must confirm completion." or "")
     SetEditable(not entry or TC.CanEditRequest(entry.owner))
     UpdateItem(); TC.Refresh()
 end
@@ -125,6 +142,11 @@ local function CreateRow(i)
         local r = self.entry.request
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetHyperlink("item:" .. r.item)
         GameTooltip:AddLine("Received: " .. r.received .. " / " .. r.quantity, 1, 1, 1)
+        local names=TC.RequestMarkNames(self.entry.owner,self.entry.slot)
+        if #names>0 then
+            GameTooltip:AddLine("Marked done by "..table.concat(names,", "),0.89,0.74,0.43,true)
+            GameTooltip:AddLine("Awaiting requester confirmation",0.7,0.7,0.7)
+        end
         GameTooltip:Show()
     end)
     row:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -139,7 +161,7 @@ end
 
 function TC.Refresh()
     if not window or not window:IsShown() or not TC.store or not window.ready then return end
-    if not TC.ApplyGuildAvailability(window) then editingSlot=nil; editingOwner=nil; selected=nil; return end
+    if not TC.ApplyGuildAvailability(window) then editingSlot=nil; editingOwner=nil; selectedRequest=nil; selected=nil; return end
     if window.guildStateChanged then window.guildStateChanged=false; LoadSelection(nil); Layout(); return end
     if window.activePage=="social" then TC.RefreshSocialWindow(); return end
     if window.activePage~="requests" then
@@ -176,13 +198,15 @@ function TC.Refresh()
             row.owner:SetText(entry.displayName)
             row.icon:SetTexture(item.icon or 134400)
             row.item:SetText(item.name)
-            row.need:SetText(not TC.IsActive(r) and "Closed" or
+            local marked=#TC.RequestMarkNames(entry.owner,entry.slot)>0
+            row.need:SetText(not TC.IsActive(r) and "Closed" or marked and "|cffe3bc6eMarked done|r" or
                 (math.max(0, r.quantity - r.received) .. (r.item == TC.GOLD and "g" or "")))
             row.purpose:SetText(r.purpose)
             row.highlight:SetShown(selected == entry.owner .. ":" .. entry.slot)
             row:Show()
         else row.entry = nil; row:Hide() end
     end
+    UpdateMarkControls()
     window.count:SetText(#rows .. " requests" .. (#rows > visibleRows and "  |  Scroll for more" or ""))
     window.status:SetText(TC.syncStatus)
     for name, button in pairs(filterButtons) do button:SetEnabled(filter ~= name) end
@@ -258,9 +282,10 @@ Layout = function()
     PlaceEdit(fields.received, column + 48 + numberWidth, -32, numberWidth)
     PlaceEdit(fields.purpose, 0, -108, column)
     PlaceEdit(fields.delivery, column + 24, -108, column)
-    Place(window.feedback, 0, -179, content - 324, 32)
-    Place(window.save, content - 296, -172, 140, 26)
-    Place(window.delete, content - 140, -172, 140, 26)
+    Place(window.markStatus, 0, -159, content, 16)
+    Place(window.feedback, 0, -191, content - 324, 32)
+    Place(window.save, content - 296, -190, 140, 26)
+    Place(window.delete, content - 140, -190, 140, 26)
     TC.Refresh()
 end
 
@@ -341,12 +366,19 @@ local function Build()
     fields.received = Edit(window.editor, "Received", 6)
     fields.purpose = Edit(window.editor, "Purpose", 64)
     fields.delivery = Edit(window.editor, "Delivery instructions", 40)
+    window.markStatus=Label(window.editor,"",0,0)
+    window.markStatus:SetTextColor(0.89,0.74,0.43)
     window.save = Button(window.editor, "Save request", function()
+        if selectedRequest and not TC.CanEditRequest(selectedRequest.owner) then
+            local _,message=TC.ToggleRequestMark(selectedRequest.owner,selectedRequest.slot)
+            window.feedback:SetText(message); TC.Refresh(); return
+        end
         local slot, err = TC.Save(editingSlot, { item = itemID, quantity = fields.quantity:GetText(), received = fields.received:GetText(),
             purpose = fields.purpose:GetText(), delivery = fields.delivery:GetText() }, editingOwner)
         if slot then
             editingOwner = editingOwner or TC.owner
             editingSlot = slot; selected = editingOwner .. ":" .. slot
+            selectedRequest={owner=editingOwner,slot=slot}
             loadedReceived = fields.received:GetText()
             window.delete:Enable(); UpdateCloseButton()
             window.editorTitle:SetText("Request by " .. TC.DisplayName(editingOwner))
@@ -422,7 +454,7 @@ local function Build()
     end)
     local function InsertRequestLink(link)
         if type(link)~="string" or not window:IsShown() or window.activePage~="requests" or
-            not window.save:IsEnabled() or not fields.item:HasFocus() then return end
+            not window.save:IsEnabled() or not fields.item:IsEnabled() or not fields.item:HasFocus() then return end
         local id=TC.Integer(link:match("item:(%d+)"),1,2147483647)
         if id then TC.LearnItem(id); fields.item:SetText(tostring(id)) end
     end

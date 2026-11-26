@@ -6,7 +6,7 @@ local serial=0
 local changedQuery
 local sharedSnapshot
 local MAX_RECORDS,MAX_PARTS,FRAGMENT=4096,512,160
-local kinds={q=true,l=true,c=true,g=true,p=true,h=true,d=true,z=true,a=true,b=true,w=true,s=true,v=true}
+local kinds={q=true,l=true,c=true,g=true,p=true,h=true,d=true,z=true,a=true,b=true,w=true,s=true,v=true,m=true}
 local function Owner(owner)
     return type(owner)=="string" and #owner<=100 and not owner:find("[%c]") and TC.NormalizeName(owner)==owner
 end
@@ -70,6 +70,10 @@ local function RecordsFor(owner,emit)
     for _,slot in ipairs(SortedKeys(store.owners[owner])) do
         local r=store.owners[owner][slot]
         emit(Record(owner,"q",slot,r.revision,{TC.Encode(slot,r)}))
+    end
+    for _,slot in ipairs(SortedKeys(store.requestMarks and store.requestMarks[owner])) do
+        local mark=store.requestMarks[owner][slot]
+        if TC.RequestMarkPacket then emit(Record(owner,"m",slot,mark.revision,{TC.RequestMarkPacket(slot,mark)})) end
     end
     local crafts=store.crafts and store.crafts[owner]
     if crafts then
@@ -145,6 +149,7 @@ local function Build(done)
     local owners={}
     for owner in pairs(store.owners or {}) do owners[owner]=true end
     for owner in pairs(store.crafts or {}) do owners[owner]=true end
+    for owner in pairs(store.requestMarks or {}) do owners[owner]=true end
     for _,field in ipairs({"gear","pvp","characters"}) do for owner in pairs(store.social and store.social[field] or {}) do owners[owner]=true end end
     local list,index={},{}
     local names=SortedKeys(owners); local position=0
@@ -255,6 +260,7 @@ local function Apply(r,packets)
         local kind=packet:match("^([^\t]+)")
         local id=packet:match("^[^\t]+\t([^\t]+)")
         local allowed=(r.kind=="q" and (kind=="R" or kind=="D") and id==r.id) or
+            (r.kind=="m" and kind=="RM" and id==r.id) or
             (r.kind=="l" and kind=="CL") or (r.kind=="c" and (kind=="CB" or kind=="CC") and id==r.id) or
             (r.kind=="g" and kind=="GG") or (r.kind=="p" and (kind=="PK" or kind=="PL")) or
             (r.kind=="h" and kind=="PH") or (r.kind=="d" and kind=="PT") or (r.kind=="z" and kind=="PZ" and Hash(id or "")==r.id) or
@@ -265,7 +271,7 @@ local function Apply(r,packets)
                 Hash(packet:match("^([^\t]+\t[^\t]+\t[^\t]+)" ) or "")==r.id)
         if not allowed then return false end
         local fields={}; for value in (packet.."\t"):gmatch("(.-)\t") do fields[#fields+1]=value end
-        local index=({q=3,l=2,c=3,g=2,p=2,h=2,d=2,z=3,v=3,a=3,b=4,s=4})[r.kind]
+        local index=({q=3,m=3,l=2,c=3,g=2,p=2,h=2,d=2,z=3,v=3,a=3,b=4,s=4})[r.kind]
         if index and TC.Integer(fields[index],0,time()+86400)~=r.revision then return false end
         if r.kind~="c" and r.kind~="g" and r.kind~="p" and #packets~=1 then return false end
         if r.kind=="c" then
@@ -315,7 +321,10 @@ local function Apply(r,packets)
         local total=0; for _,count in pairs(gaps) do total=total+count end
         if total>head then return false end
     end
-    if request then TC.ApplyRequest(request[1],request[2],r.owner,true)
+    if r.kind=="m" then
+        if not TC.ReceiveRequestMark then return false end
+        TC.ReceiveRequestMark(packets[1],r.owner,true)
+    elseif request then TC.ApplyRequest(request[1],request[2],r.owner,true)
     else for _,packet in ipairs(packets) do TC.ReceiveGuildData(packet,r.owner,true) end end
     return true
 end

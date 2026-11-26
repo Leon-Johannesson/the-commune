@@ -1,5 +1,15 @@
-# The Commune — 0.4.56
+# The Commune — 0.4.57
 
+
+## Completion marks with requester confirmation (0.4.57)
+
+Select another guildmate's open request and use Mark as done. The row stays on the board with an amber Marked done label, and the editor and row tooltip identify who marked it. The same player can use Undo my mark. Multiple guildmates can mark one request independently; undo removes only your own mark.
+
+A mark does not change the requested/received amounts, close a request, delete it, or award credits. Only the requester and their locally recognized account characters can use Confirm done to close the request, then Include closed and Delete request to remove it. This preserves account-wide request management. New or edited requests do not inherit old marks: each mark applies to an exact request revision and item. Saving or updating the request therefore clears obsolete pending indications.
+
+Marks are stored separately per guild and per marking character, capped at 20 active marks per character. Withdrawals keep revisioned tombstones, and markers for changed or closed requests can be reused. Additive RM packets and the existing paced cache relay share marks even when the marker is offline, provided another online guildmate received them. Request R/D formats and creator edit permissions are unchanged. Older addon versions still see the open request but do not show completion marks; update all participants to use this feature.
+
+Offline tests cover the mark/undo/confirm UI, permissions, layout, reordering, withdrawals and cache transfers. Live sharing with guildmates still needs in-game verification.
 
 ## Reliable nearby-hitlist targeting (0.4.56)
 

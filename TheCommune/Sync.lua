@@ -118,6 +118,7 @@ function TC.BroadcastSlot(slot, owner)
 end
 
 local function BroadcastRequests()
+    if TC.BroadcastRequestMarks then TC.BroadcastRequestMarks() end
     for slot in pairs(TC.store.owners[TC.owner]) do TC.BroadcastSlot(slot) end
     for owner,slots in pairs(TC.store.owners) do
         if owner ~= TC.owner and TC.CanEditRequest(owner) and next(slots) then
@@ -194,6 +195,7 @@ function TC.Receive(prefix, message, channel, sender)
         local guild=TC.guildKey
         C_Timer.After(0.5+math.random()*2,function() if TC.guildKey==guild then TC.BroadcastAll() end end)
     end
+    if TC.ReceiveRequestMark and TC.ReceiveRequestMark(message,sender) then return end
     if TC.ReceiveGuildData and TC.ReceiveGuildData(message, sender) then return end
     local slot, r = TC.Decode(message)
     if not slot then stats.rejected = stats.rejected + 1; return end

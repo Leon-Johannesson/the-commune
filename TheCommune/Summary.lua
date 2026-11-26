@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.56",
-    text = "Nearby-hitlist clicks now target on release, with an exact-name fallback."
+    version = "0.4.57",
+    text = "Guildmates can mark requests done; requesters confirm completion."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then
