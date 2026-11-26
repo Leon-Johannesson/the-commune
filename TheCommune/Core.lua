@@ -29,8 +29,8 @@ end
 
 function TC.NormalizeName(name)
     if type(name) ~= "string" or name == "" then return nil end
-    -- Forever can deliver "Radio Lysander-CAMWOWEU5Realm8PvP" for the
-    -- same character that UnitFullName identifies as "Radio", "Lysander".
+    -- Forever can deliver "Example Name-CAMWOWEU5Realm8PvP" for the
+    -- same character that UnitFullName identifies as "Example", "Name".
     -- The CAMWOW suffix is a physical realm, not the character's virtual realm.
     local virtualName, physicalRealm = name:match("^([^%-]+)%-(.+)$")
     if virtualName and virtualName:find(" ", 1, true) and physicalRealm:match("^CAMWOW") then

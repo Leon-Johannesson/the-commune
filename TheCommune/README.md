@@ -50,7 +50,7 @@ Turn it off with `Announce my deaths in guild chat` on the Deaths tab, beside th
 
 ## Real level-ups and more reliable announcements (0.4.52)
 
-The temporary Radio Lysander popup, example stats and preview command have been removed. The same portrait popup remains for real level-ups on every character, using live stat snapshots. Both the popup and announcements now handle PLAYER_LEVEL_UP and the modern PLAYER_LEVEL_CHANGED event, accepting only upward real-level changes from the latter and deduplicating the two event paths. Login, reload and temporary level scaling do not create a celebration.
+The temporary preview popup, example stats and preview command have been removed. The same portrait popup remains for real level-ups on every character, using live stat snapshots. Both the popup and announcements now handle PLAYER_LEVEL_UP and the modern PLAYER_LEVEL_CHANGED event, accepting only upward real-level changes from the latter and deduplicating the two event paths. Login, reload and temporary level scaling do not create a celebration.
 
 Even-level guild announcements now wait until combat and the client's chat-messaging lockdown have ended. They use actual guild membership instead of requiring the addon's guild store to be ready. A short-lived pending send allows up to three attempts after explicit errors or rejections, expires after two minutes, and is cancelled if the guild changes. A nil return is treated as submitted, not retried for lack of an echo, to avoid duplicate chat. Old levels are not replayed after reload or joining a guild. Login refreshes the current-level baseline instead of retaining a stale higher level forever.
 
@@ -62,7 +62,7 @@ Every actual level-up now shows a movable, portrait-topped window in The Commune
 
 The addon keeps a live in-session snapshot and waits for the new level's stats before comparing. These are character totals including current equipment and effects, so equipment or buff changes at the same time can affect the differences. Duplicate level events are ignored, rapid levels coalesce, and the popup waits until combat ends before appearing. It closes after 20 seconds or with its close button; its dragged position is saved. Ordinary login/reload does not replay a level-up. The existing even-level guild-chat announcement is unchanged.
 
-For this design preview, Radio Lysander alone gets a one-time automatic popup after login, clearly marked as example values, which stays until closed. On that exact character, /commune levelpreview can reopen the temporary preview outside combat. The preview changes no real stats or rewards and sends no chat or guild data. Other characters only receive real level-up popups.
+For this design preview, one designated character alone gets a one-time automatic popup after login, clearly marked as example values, which stays until closed. On that exact character, /commune levelpreview can reopen the temporary preview outside combat. The preview changes no real stats or rewards and sends no chat or guild data. Other characters only receive real level-up popups.
 
 ## Modern item-link handler (0.4.50)
 
@@ -154,7 +154,7 @@ A small movable panel shows the same current-zone counts while playing. It stays
 
 ## Offline player information sharing (0.4.36)
 
-Online guildmates can now forward their saved copies of another player's requests, profession skills and learned recipes, equipment, PvP/death statistics, and daily-game profile while that player is offline. Previously saved records work too; the original player does not have to log in again first. Radio and Arrow both need 0.4.36 or newer for Radio to forward Keyin's cached information to Arrow. Older versions continue to exchange their own updates normally.
+Online guildmates can now forward their saved copies of another player's requests, profession skills and learned recipes, equipment, PvP/death statistics, and daily-game profile while that player is offline. Previously saved records work too; the original player does not have to log in again first. The forwarding guildmate and the receiving one both need 0.4.36 or newer to relay an offline player's cached information. Older versions continue to exchange their own updates normally.
 
 Discovery runs at login and with Sync guild. Caches advertise revisions and checksums, the receiver requests only missing/newer or differing records at the same revision, and peers suppress duplicate offers. Normal updates and profession scans take priority over background cache traffic. Large records are fragmented within WoW's message limit, verified before processing, and retried on interruption. Stored ownership, independent revisions, request deletions, and existing officer/guild-leader checks remain intact. A cached copy is the last known snapshot; it cannot reveal changes that the offline player has not shared yet. Projects and the hitlist retain their existing forwarding paths.
 
