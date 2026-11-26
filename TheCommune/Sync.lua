@@ -48,6 +48,7 @@ function TC.DebugSync()
     if TC.DebugTracking then TC.DebugTracking() end
     if TC.DebugHits then TC.DebugHits() end
     if TC.DebugCredits then TC.DebugCredits() end
+    if TC.DebugLevels then TC.DebugLevels() end
 end
 
 function TC.Encode(slot, r, legacy)

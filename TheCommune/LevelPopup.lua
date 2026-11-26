@@ -71,12 +71,11 @@ local function Build()
     popup:HookScript("OnShow",Portrait)
     popup:Hide()
 end
-local function Show(before,after,preview)
+local function Show(before,after)
     if not popup then Build() end
     shownToken={}; local token=shownToken
-    popup.title:SetText(preview and "Level-up preview" or ("Level "..after.level.."!"))
-    popup.subtitle:SetText(preview and "Radio Lysander  |  Example values" or
-        (before and before.level and ("Level "..before.level.."  >  "..after.level) or "Your character has grown"))
+    popup.title:SetText("Level "..after.level.."!")
+    popup.subtitle:SetText(before and before.level and ("Level "..before.level.."  >  "..after.level) or "Your character has grown")
     local count=0
     for _,row in ipairs(popup.rows) do row:Hide() end
     for _,field in ipairs(fields) do
@@ -96,27 +95,16 @@ local function Show(before,after,preview)
     end
     if count==0 then
         popup.note:SetText("Character stats are unavailable on this client.")
-    else popup.note:SetText(preview and "PREVIEW ONLY - sample gains, not a real level-up." or "Current character totals, including equipment and effects.") end
+    else popup.note:SetText("Current character totals, including equipment and effects.") end
     popup:SetHeight(117+count*23+66)
-    popup.hint:SetText(preview and "Drag to move  |  Close when finished" or "Drag to move  |  Closes after 20 seconds")
+    popup.hint:SetText("Drag to move  |  Closes after 20 seconds")
     Portrait(); popup:Show()
-    if not preview then C_Timer.After(20,function() if shownToken==token and popup then popup:Hide() end end) end
-end
-local function Radio()
-    return TC.owner and TC.DisplayName(TC.owner)=="Radio Lysander"
-end
-function TC.PreviewLevelPopup()
-    if not TC.db or not Radio() then return false end
-    if InCombatLockdown and InCombatLockdown() then return false end
-    local before={level=29,health=1000,mana=1450,strength=42,agility=36,stamina=61,intellect=78,spirit=53}
-    local after={level=30,health=1050,mana=1510,strength=43,agility=37,stamina=63,intellect=80,spirit=55}
-    Show(before,after,true)
-    return true
+    C_Timer.After(20,function() if shownToken==token and popup then popup:Hide() end end)
 end
 local function DisplayReady()
     if not ready or (InCombatLockdown and InCombatLockdown()) then return end
     local result=ready; ready=nil
-    Show(result.before,result.after,false)
+    Show(result.before,result.after)
 end
 local function Sample()
     if pending then return end
@@ -124,28 +112,21 @@ local function Sample()
     if snapshot.level and (not baseline or not baseline.level or snapshot.level==baseline.level) then baseline=snapshot end
 end
 local events=CreateFrame("Frame")
-for _,event in ipairs({"PLAYER_LOGIN","PLAYER_LEVEL_UP","PLAYER_REGEN_ENABLED","UNIT_STATS","UNIT_MAXHEALTH","UNIT_MAXPOWER","PLAYER_EQUIPMENT_CHANGED","UNIT_PORTRAIT_UPDATE"}) do
+for _,event in ipairs({"PLAYER_LOGIN","PLAYER_LEVEL_UP","PLAYER_LEVEL_CHANGED","PLAYER_REGEN_ENABLED","UNIT_STATS","UNIT_MAXHEALTH","UNIT_MAXPOWER","PLAYER_EQUIPMENT_CHANGED","UNIT_PORTRAIT_UPDATE"}) do
     pcall(events.RegisterEvent,events,event)
 end
-events:SetScript("OnEvent",function(_,event,arg)
+events:SetScript("OnEvent",function(_,event,arg,newLevel,real)
     if not TC.db or not TC.owner then return end
     if event=="PLAYER_LOGIN" then
         baseline=Snapshot()
-        -- Temporary owner-requested preview, once for this release on the exact
-        -- full character name. It never changes real stats or sends a message.
-        local attempts=0
-        local function Preview()
-            attempts=attempts+1
-            if TC.db and Radio() then
-                TC.db.levelPopupPreview=TC.db.levelPopupPreview or {}
-                if not TC.db.levelPopupPreview[TC.owner] and not shownToken then
-                    if not pending and not ready and TC.PreviewLevelPopup() then TC.db.levelPopupPreview[TC.owner]=true
-                    elseif attempts<20 then C_Timer.After(1,Preview) end
-                end
-            elseif attempts<20 then C_Timer.After(1,Preview) end
+    elseif event=="PLAYER_LEVEL_UP" or event=="PLAYER_LEVEL_CHANGED" then
+        if event=="PLAYER_LEVEL_CHANGED" then
+            if (issecretvalue and issecretvalue(real)) or real~=true then return end
+            local old=Read(function() return arg end,1)
+            local new=Read(function() return newLevel end,1)
+            if not old or old<1 or not new or new<=old then return end
+            arg=new
         end
-        C_Timer.After(4,Preview)
-    elseif event=="PLAYER_LEVEL_UP" then
         local level=Read(function() return arg end,1)
         if not level or level<1 or level>255 then return end
         local previous=pending and pending.before or ready and ready.before or baseline

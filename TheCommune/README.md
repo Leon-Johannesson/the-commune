@@ -1,4 +1,12 @@
-# The Commune — 0.4.51
+# The Commune — 0.4.52
+
+## Real level-ups and more reliable announcements (0.4.52)
+
+The temporary Radio Lysander popup, example stats and preview command have been removed. The same portrait popup remains for real level-ups on every character, using live stat snapshots. Both the popup and announcements now handle PLAYER_LEVEL_UP and the modern PLAYER_LEVEL_CHANGED event, accepting only upward real-level changes from the latter and deduplicating the two event paths. Login, reload and temporary level scaling do not create a celebration.
+
+Even-level guild announcements now wait until combat and the client's chat-messaging lockdown have ended. They use actual guild membership instead of requiring the addon's guild store to be ready. A short-lived pending send allows up to three attempts after explicit errors or rejections, expires after two minutes, and is cancelled if the guild changes. A nil return is treated as submitted, not retried for lack of an echo, to avoid duplicate chat. Old levels are not replayed after reload or joining a guild. Login refreshes the current-level baseline instead of retaining a stale higher level forever.
+
+/commune debug now includes this character's latest announcement status. This cannot reconstruct an earlier missed message on someone else's client, and only the leveling player's addon sends their announcement, so that player needs the updated addon running. Offline checks cover both event paths, restrictions, retries and popups; live guild-chat delivery still needs verification.
 
 ## Level-up stat popup (0.4.51)
 
