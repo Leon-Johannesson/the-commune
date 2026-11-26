@@ -2,8 +2,8 @@ local _, TC = ...
 local bubble, state, currentStore
 local deferredByInstance=false
 local latestUpdate = {
-    version = "0.4.53",
-    text = "Your deaths are now announced in guild chat; toggle it on the Deaths tab."
+    version = "0.4.54",
+    text = "Death announcements can no longer be switched off. Die with dignity."
 }
 local function InInstance()
     if type(IsInInstance)=="function" then

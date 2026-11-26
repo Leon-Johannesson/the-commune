@@ -143,7 +143,6 @@ function TC.RefreshZoneDeaths()
         page.scrollBar.Refresh(#rows, page.visible, pageOffset)
         page.empty:SetShown(#rows == 0)
         page.showPanel:SetChecked(TC.db.zoneDeathPanel ~= false)
-        page.announce:SetChecked(TC.db.deathAnnounce ~= false)
     end
     if TC.db.zoneDeathPanel == false or dismissedZone == key or #rows == 0 or key == "unknown" then
         if panel then panel:Hide() end
@@ -180,11 +179,6 @@ function TC.BuildDeathsPage(window, H)
     page.note:SetFontObject("GameFontDisableSmall")
     page.showPanel = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
     page.panelLabel = H.Label(page, "Show zone panel while playing", 0, 0)
-    page.announce = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
-    page.announceLabel = H.Label(page, "Announce my deaths in guild chat", 0, 0)
-    page.announce:SetScript("OnClick", function(self)
-        TC.db.deathAnnounce = not not self:GetChecked()
-    end)
     page.showPanel:SetScript("OnClick", function(self)
         TC.db.zoneDeathPanel = not not self:GetChecked()
         dismissedZone = nil
@@ -221,9 +215,7 @@ function TC.BuildDeathsPage(window, H)
         H.Place(page.scrollBar, width - 36, -206, 12, page.visible * 30 - 4)
         H.Place(page.empty, 32, -220, content - 16, 20)
         H.Place(page.showPanel, 24, -height + 70, 26, 26)
-        H.Place(page.panelLabel, 56, -height + 77, 240, 18)
-        H.Place(page.announce, 310, -height + 70, 26, 26)
-        H.Place(page.announceLabel, 342, -height + 77, content - 318, 18)
+        H.Place(page.panelLabel, 56, -height + 77, content - 32, 18)
         H.Place(page.note, 28, -height + 34, content - 8, 18)
     end
     window.guildPages.deaths = page

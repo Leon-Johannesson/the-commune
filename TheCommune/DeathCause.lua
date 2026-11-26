@@ -95,7 +95,7 @@ local function Describe(detail)
 end
 
 local function Announce(zone, detail)
-    if not TC.db or TC.db.deathAnnounce == false or not TC.guildKey then return end
+    if not TC.db or not TC.guildKey then return end
     local now = GetTime()
     -- A corpse run back into the same hazard should not spam the guild.
     if now - lastAnnounce < 15 then return end

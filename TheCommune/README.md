@@ -1,4 +1,10 @@
-# The Commune — 0.4.53
+# The Commune — 0.4.54
+
+## Death announcements are mandatory (0.4.54)
+
+The `Announce my deaths in guild chat` checkbox is gone and death announcements can no longer be turned off. Everyone running this version is reported to the guild on equal terms. The announcement itself is unchanged, including the fifteen-second rate limit and the silence while unguilded.
+
+The Deaths tab keeps its zone panel checkbox, which now spans the full width again. A saved `deathAnnounce` setting from 0.4.53 is simply ignored; nothing needs to be reset.
 
 ## Death announcements in guild chat (0.4.53)
 
